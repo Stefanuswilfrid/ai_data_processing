@@ -1,0 +1,588 @@
+"\"use client"
+
+import { useState, useEffect } from "react"
+import { UrlInput } from "./inputs/url-input"
+import { InstructionInput } from "./inputs/instruction-input"
+import { Button } from "@/components/ui/button"
+import { Loader2, Table, FileSpreadsheet, HelpCircle } from "lucide-react"
+import { extractProductData } from "@/lib/services/extraction-service"
+import { DataPreview } from "./data/data-preview"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { motion } from "framer-motion"
+import { useToast } from "@/hooks/use-toast"
+import { useLocalStorage } from "@/hooks/use-local-storage"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { ExtractionHistory } from "./data/extraction-history"
+import { ErrorBoundary } from "./error-boundary"
+import { SampleDataButton } from "./inputs/sample-data-button"
+import { ExportOptions } from "./data/export-options"
+import { KeyboardShortcuts } from "./keyboard-shortcuts"
+import type { ProductData } from "@/lib/types"
+import { useMobile } from "@/hooks/use-mobile"
+
+export function ProductDataExtractor() {
+  const [urls, setUrls] = useState<string[]>([])
+  const [instruction, setInstruction] = useState("")
+  const [extractedData, setExtractedData] = useState<ProductData[]>([])
+  const [isExtracting, setIsExtracting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [activeUrl, setActiveUrl] = useState<string | null>(null)
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
+  const [showSuccess, setShowSuccess] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [showHistory, setShowHistory] = useState(false)
+  const { toast } = useToast()
+  const [history, setHistory] = useLocalStorage<{ date: string; urls: string[]; data: ProductData[] }[]>(
+    "extraction-history",
+    [],
+  )
+  const isMobile = useMobile()
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + Enter to submit
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        if (urls.length > 0 && instruction && !isExtracting) {
+          handleSubmit()
+        }
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [urls, instruction, isExtracting])
+
+  const handleSubmit = async () => {
+    if (urls.length === 0) {
+      setError("Please enter at least one URL")
+      return
+    }
+
+    if (!instruction) {
+      setError("Please enter extraction instructions")
+      return
+    }
+
+    setError(null)
+    setIsExtracting(true)
+    setExtractedData([])
+    setDownloadUrl(null)
+    setShowSuccess(false)
+    setProgress(0)
+
+    try {
+      // Simulate progress updates
+      const progressInterval = setInterval(() => {
+        setProgress((prev) => {
+          const newProgress = prev + (100 - prev) * 0.1
+          return newProgress > 95 ? 95 : newProgress
+        })
+      }, 500)
+
+      const result = await extractProductData(urls, instruction)
+
+      clearInterval(progressInterval)
+      setProgress(100)
+
+      setExtractedData(result.data)
+      setDownloadUrl(result.downloadUrl)
+      setShowSuccess(true)
+
+      // Add to history
+      setHistory([
+        { date: new Date().toISOString(), urls, data: result.data },
+        ...history.slice(0, 9), // Keep only last 10 extractions
+      ])
+
+      toast({
+        title: "Data extraction complete",
+        description: `Successfully extracted data from ${result.data.length} URLs`,
+      })
+    } catch (err) {
+      console.error(err)
+      setError("Failed to extract data. Please check your URLs and try again.")
+      toast({
+        variant: "destructive",
+        title: "Extraction failed",
+        description: "There was a problem extracting data from the provided URLs.",
+      })
+    } finally {
+      setIsExtracting(false)
+      setProgress(0)
+    }
+  }
+
+  const handleUrlSelect = (url: string) => {
+    setActiveUrl(url)
+  }
+
+  return (
+    <ErrorBoundary>
+      <KeyboardShortcuts />
+      <div className="space-y-8">
+        <div className="grid md:grid-cols-2 gap-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="space-y-6"
+          >
+            <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 shadow-xl">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center">
+                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center mr-3 shadow-lg shadow-indigo-500/20">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2z"></path>
+                      <path d="M4 2v16a2 2 0 0 0 2 2h16"></path>
+                      <path d="M2 12h10"></path>
+                      <path d="M12 2v10"></path>
+                    </svg>
+                  </div>
+                  <h2 className="text-xl font-semibold text-white">Input Sources</h2>
+                </div>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-slate-400 hover:text-white hover:bg-slate-700"
+                        data-tour="help-urls"
+                      >
+                        <HelpCircle className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="max-w-xs">
+                        Enter URLs from e-commerce sites like Amazon, eBay, Walmart, etc. You can add multiple URLs to
+                        process in batch.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <div className="space-y-6">
+                <UrlInput urls={urls} setUrls={setUrls} onUrlSelect={handleUrlSelect} activeUrl={activeUrl} />
+                <div className="flex justify-between">
+                  <SampleDataButton
+                    onSelect={(sampleUrls) => {
+                      setUrls(sampleUrls)
+                      toast({
+                        title: "Sample URLs added",
+                        description: `Added ${sampleUrls.length} sample URLs`,
+                      })
+                    }}
+                  />
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-slate-300 border-slate-700 hover:bg-slate-700"
+                    onClick={() => setShowHistory(!showHistory)}
+                  >
+                    {showHistory ? "Hide History" : "Show History"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 shadow-xl"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center">
+                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center mr-3 shadow-lg shadow-indigo-500/20">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"></path>
+                    </svg>
+                  </div>
+                  <h2 className="text-xl font-semibold text-white">Extraction Instructions</h2>
+                </div>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-slate-400 hover:text-white hover:bg-slate-700"
+                        data-tour="help-instructions"
+                      >
+                        <HelpCircle className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="max-w-xs">
+                        Tell the AI what data to extract. Be specific about fields like product name, price,
+                        description, or specifications.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <div className="space-y-6">
+                <InstructionInput value={instruction} onChange={setInstruction} />
+
+                {error && (
+                  <Alert variant="destructive" className="bg-red-900/20 border-red-800 text-red-200">
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="relative">
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={isExtracting || urls.length === 0 || !instruction}
+                    className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-indigo-500/20"
+                    data-tour="extract-button"
+                  >
+                    {isExtracting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Extracting data... {progress > 0 ? `${Math.round(progress)}%` : ""}
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="mr-2"
+                        >
+                          <path d="m8 3 4 8 5-5 5 15H2L8 3z"></path>
+                        </svg>
+                        Extract Product Data
+                      </>
+                    )}
+                  </Button>
+                  {isExtracting && (
+                    <div
+                      className="absolute bottom-0 left-0 h-1 bg-indigo-500 rounded-full transition-all duration-300"
+                      style={{ width: `${progress}%` }}
+                    ></div>
+                  )}
+                </div>
+
+                <div className="text-xs text-slate-400 text-center">
+                  Pro tip: Press{" "}
+                  <kbd className="px-1 py-0.5 bg-slate-700 rounded border border-slate-600 mx-1">Ctrl</kbd> +{" "}
+                  <kbd className="px-1 py-0.5 bg-slate-700 rounded border border-slate-600 mx-1">Enter</kbd> to extract
+                  data
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            {showHistory ? (
+              <ExtractionHistory
+                history={history}
+                onClose={() => setShowHistory(false)}
+                onSelect={(item) => {
+                  setUrls(item.urls)
+                  setExtractedData(item.data)
+                  setShowHistory(false)
+                  toast({
+                    title: "History item loaded",
+                    description: "Previous extraction data has been loaded",
+                  })
+                }}
+              />
+            ) : (
+              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 shadow-xl h-full">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center">
+                    <div className="h-8 w-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center mr-3 shadow-lg shadow-indigo-500/20">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                      </svg>
+                    </div>
+                    <h2 className="text-xl font-semibold text-white">Instructions Guide</h2>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-slate-300 border-slate-700 hover:bg-slate-700"
+                    data-tour="start-tour"
+                  >
+                    Start Tour
+                  </Button>
+                </div>
+
+                <div className="space-y-6 text-slate-300">
+                  <div className="space-y-4">
+                    <div className="bg-slate-700/30 rounded-xl p-4 border border-slate-600/50">
+                      <h3 className="font-medium text-white mb-2 flex items-center">
+                        <span className="flex items-center justify-center bg-violet-600/20 text-violet-400 w-6 h-6 rounded-full text-xs mr-2">
+                          1
+                        </span>
+                        Add Product URLs
+                      </h3>
+                      <p className="text-sm">
+                        Enter URLs from e-commerce sites like Coles, Woolworths, Kmart, or Target. Add multiple URLs to
+                        process in batch.
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-700/30 rounded-xl p-4 border border-slate-600/50">
+                      <h3 className="font-medium text-white mb-2 flex items-center">
+                        <span className="flex items-center justify-center bg-violet-600/20 text-violet-400 w-6 h-6 rounded-full text-xs mr-2">
+                          2
+                        </span>
+                        Specify Instructions
+                      </h3>
+                      <p className="text-sm">
+                        Tell the AI what data to extract. Be specific about fields like product name, price,
+                        description, or specifications.
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-700/30 rounded-xl p-4 border border-slate-600/50">
+                      <h3 className="font-medium text-white mb-2 flex items-center">
+                        <span className="flex items-center justify-center bg-violet-600/20 text-violet-400 w-6 h-6 rounded-full text-xs mr-2">
+                          3
+                        </span>
+                        Extract & Download
+                      </h3>
+                      <p className="text-sm">
+                        Click "Extract Product Data" and wait for processing. Review the extracted data and download as
+                        Excel.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-4">
+                    <div className="bg-indigo-900/20 border border-indigo-800/50 rounded-xl p-4">
+                      <h3 className="font-medium text-white mb-2 flex items-center">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="mr-2 text-indigo-400"
+                        >
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <path d="M12 16v-4"></path>
+                          <path d="M12 8h.01"></path>
+                        </svg>
+                        Pro Tips
+                      </h3>
+                      <ul className="text-sm space-y-2 text-slate-300">
+                        <li className="flex items-start">
+                          <span className="text-indigo-400 mr-2">•</span>
+                          Use the template selector for common extraction patterns
+                        </li>
+                        <li className="flex items-start">
+                          <span className="text-indigo-400 mr-2">•</span>
+                          For best results, be specific about the exact fields you need
+                        </li>
+                        <li className="flex items-start">
+                          <span className="text-indigo-400 mr-2">•</span>
+                          Try the sample data button to see how it works
+                        </li>
+                        <li className="flex items-start">
+                          <span className="text-indigo-400 mr-2">•</span>
+                          Use keyboard shortcuts for faster workflow
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        </div>
+
+        {(isExtracting || extractedData.length > 0) && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 shadow-xl"
+            data-tour="results-section"
+          >
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center">
+                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center mr-3 shadow-lg shadow-indigo-500/20">
+                  <FileSpreadsheet className="h-4 w-4" />
+                </div>
+                <h2 className="text-xl font-semibold text-white">Extracted Data</h2>
+              </div>
+              {downloadUrl && !isMobile && (
+                <ExportOptions
+                  downloadUrl={downloadUrl}
+                  data={extractedData}
+                  onExport={(format) => {
+                    toast({
+                      title: `Exported as ${format.toUpperCase()}`,
+                      description: "Your data has been exported successfully",
+                    })
+                  }}
+                />
+              )}
+            </div>
+
+            {isExtracting ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <div className="relative">
+                  <div className="h-16 w-16 rounded-full border-4 border-indigo-200/30 border-t-indigo-500 animate-spin"></div>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="text-indigo-400"
+                    >
+                      <path d="m8 3 4 8 5-5 5 15H2L8 3z"></path>
+                    </svg>
+                  </div>
+                </div>
+                <p className="mt-6 text-slate-300 font-medium">Extracting data from URLs...</p>
+                <p className="text-sm text-slate-400 mt-2 max-w-md text-center">
+                  Our AI is analyzing the content and extracting structured data according to your instructions. This
+                  may take a minute depending on the number of URLs.
+                </p>
+                <div className="w-full max-w-md mt-6 bg-slate-700/30 rounded-full h-2.5">
+                  <div
+                    className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"
+                    style={{ width: `${progress}%` }}
+                  ></div>
+                </div>
+                <p className="text-xs text-slate-400 mt-2">{Math.round(progress)}% complete</p>
+              </div>
+            ) : extractedData.length > 0 ? (
+              <>
+                {showSuccess && (
+                  <div className="mb-6 bg-emerald-900/20 border border-emerald-800/50 rounded-xl p-4 text-emerald-200">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="text-emerald-400"
+                        >
+                          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                          <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm font-medium">
+                          Successfully extracted data from {extractedData.length} URLs
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {isMobile && downloadUrl && (
+                  <div className="mb-4">
+                    <ExportOptions
+                      downloadUrl={downloadUrl}
+                      data={extractedData}
+                      onExport={(format) => {
+                        toast({
+                          title: `Exported as ${format.toUpperCase()}`,
+                          description: "Your data has been exported successfully",
+                        })
+                      }}
+                    />
+                  </div>
+                )}
+
+                <Tabs defaultValue="table" className="w-full">
+                  <TabsList className="mb-4 bg-slate-700/50 border border-slate-600/50">
+                    <TabsTrigger
+                      value="table"
+                      className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white"
+                    >
+                      <Table className="h-4 w-4 mr-2" />
+                      Table View
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="json"
+                      className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white"
+                    >
+                      JSON View
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="table">
+                    <div className="overflow-x-auto">
+                      <DataPreview data={extractedData} />
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="json">
+                    <pre className="bg-slate-900/50 p-4 rounded-xl overflow-x-auto text-sm text-slate-300 border border-slate-700/50">
+                      {JSON.stringify(extractedData, null, 2)}
+                    </pre>
+                  </TabsContent>
+                </Tabs>
+              </>
+            ) : null}
+          </motion.div>
+        )}
+      </div>
+    </ErrorBoundary>
+  )
+}
