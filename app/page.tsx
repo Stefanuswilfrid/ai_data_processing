@@ -1,5 +1,6 @@
 import { GuidedTour } from "@/components/guided-tour";
 import { Particles } from "@/components/particles";
+import { ProductDataExtractor } from "@/components/product-data-extractor";
 import Image from "next/image";
 
 export default function Home() {
@@ -36,8 +37,7 @@ export default function Home() {
           Transform e-commerce product pages into structured data with AI-powered extraction
         </p>
       </div>
-      {/* <ProductDataExtractor />
-      <GuidedTour /> */}
+      {/* <ProductDataExtractor /> */}
       <GuidedTour />
     </div>
   </main>
