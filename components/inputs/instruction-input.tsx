@@ -3,7 +3,7 @@
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { motion } from "framer-motion"
 import { INSTRUCTION_TEMPLATES } from "@/lib/constants"
 import { Button } from "@/components/ui/button"
@@ -20,8 +20,10 @@ export function InstructionInput({ value, onChange }: InstructionInputProps) {
   const [isFocused, setIsFocused] = useState(false)
   const { toast } = useToast()
 
-  const handleExampleSelect = (example: string) => {
+  const handleExampleSelect = useCallback((example: string) => {
+    if (selectedExample === example) return // prevent loop
     setSelectedExample(example)
+
     const selectedInstruction = INSTRUCTION_TEMPLATES.find((instruction) => instruction.label === example)
     if (selectedInstruction) {
       onChange(selectedInstruction.value)
@@ -30,9 +32,9 @@ export function InstructionInput({ value, onChange }: InstructionInputProps) {
         description: `Applied the "${selectedInstruction.label}" template`,
       })
     }
-  }
+  }, [selectedExample, onChange, toast])
 
-  const handleGenerateInstructions = () => {
+  const handleGenerateInstructions = useCallback(() => {
     // This would ideally call an AI endpoint to generate custom instructions
     // For now, we'll just use a template as a placeholder
     const randomTemplate = INSTRUCTION_TEMPLATES[Math.floor(Math.random() * INSTRUCTION_TEMPLATES.length)]
@@ -42,7 +44,19 @@ export function InstructionInput({ value, onChange }: InstructionInputProps) {
       title: "AI-generated instructions",
       description: "Custom instructions have been generated based on common extraction patterns",
     })
-  }
+  }, [onChange, toast])
+
+  // Only update selectedExample if value changes and doesn't match current selection
+  useEffect(() => {
+    const matched = INSTRUCTION_TEMPLATES.find((t) => t.value === value)
+    // Only update if we’re not already matching
+    if (matched && selectedExample !== matched.label) {
+      setSelectedExample(matched.label)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]) // ✅ intentionally leave selectedExample out
+  
+  
 
   return (
     <div className="space-y-4">

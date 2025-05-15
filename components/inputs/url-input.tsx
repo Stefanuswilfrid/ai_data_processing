@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { motion, AnimatePresence } from "framer-motion"
 import { useToast } from "@/hooks/use-toast"
-import { validateUrl } from "@/lib/utils/validators"
+import { validateUrl } from "@/lib/utils/validator"
 
 interface UrlInputProps {
   urls: string[]

@@ -1,31 +1,23 @@
-"use client"
-
 import { useState, useEffect } from "react"
 
-export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T) => void] {
-  const [storedValue, setStoredValue] = useState<T>(initialValue)
+export function useLocalStorage<T>(key: string, initialValue: T) {
+  const [storedValue, setStoredValue] = useState<T>(() => {
+    try {
+      const item = typeof window !== "undefined" ? window.localStorage.getItem(key) : null
+      return item ? JSON.parse(item) : initialValue
+    } catch (error) {
+      console.warn("Error reading localStorage", error)
+      return initialValue
+    }
+  })
 
   useEffect(() => {
     try {
-      const item = window.localStorage.getItem(key)
-      setStoredValue(item ? JSON.parse(item) : initialValue)
+      window.localStorage.setItem(key, JSON.stringify(storedValue))
     } catch (error) {
-      console.error(error)
-      setStoredValue(initialValue)
+      console.warn("Error setting localStorage", error)
     }
-  }, [key, initialValue])
+  }, [key, storedValue]) // ✅ only rerun when value actually changes
 
-  const setValue = (value: T) => {
-    try {
-      const valueToStore = value instanceof Function ? value(storedValue) : value
-      setStoredValue(valueToStore)
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(key, JSON.stringify(valueToStore))
-      }
-    } catch (error) {
-      console.error(error)
-    }
-  }
-
-  return [storedValue, setValue]
+  return [storedValue, setStoredValue] as const
 }

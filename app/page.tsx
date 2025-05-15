@@ -37,7 +37,7 @@ export default function Home() {
           Transform e-commerce product pages into structured data with AI-powered extraction
         </p>
       </div>
-      {/* <ProductDataExtractor /> */}
+      <ProductDataExtractor />
       <GuidedTour />
     </div>
   </main>

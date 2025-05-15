@@ -1,4 +1,4 @@
-"\"use client"
+"use client"
 
 import { useState, useEffect } from "react"
 import { UrlInput } from "./inputs/url-input"
@@ -152,7 +152,7 @@ export function ProductDataExtractor() {
                   </div>
                   <h2 className="text-xl font-semibold text-white">Input Sources</h2>
                 </div>
-                <TooltipProvider>
+                {/* <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -171,7 +171,7 @@ export function ProductDataExtractor() {
                       </p>
                     </TooltipContent>
                   </Tooltip>
-                </TooltipProvider>
+                </TooltipProvider> */}
               </div>
               <div className="space-y-6">
                 <UrlInput urls={urls} setUrls={setUrls} onUrlSelect={handleUrlSelect} activeUrl={activeUrl} />
@@ -583,6 +583,7 @@ export function ProductDataExtractor() {
           </motion.div>
         )}
       </div>
+      {/* <Particles /> */}
     </ErrorBoundary>
   )
 }
