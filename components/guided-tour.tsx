@@ -76,7 +76,6 @@ export function GuidedTour() {
         return () => clearTimeout(timer)
       }
   
-      // Handle tour start button click
       const handleStartTour = (e: MouseEvent) => {
         const target = e.target as Element
         if (target.closest('[data-tour="start-tour"]')) {
@@ -171,10 +170,8 @@ export function GuidedTour() {
     return createPortal(
       <AnimatePresence>
         <div className="fixed inset-0 z-50 pointer-events-none">
-          {/* Highlight */}
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={highlightStyle} />
   
-          {/* Tooltip */}
           <motion.div
             className="absolute z-50 pointer-events-auto"
             style={tooltipStyle}

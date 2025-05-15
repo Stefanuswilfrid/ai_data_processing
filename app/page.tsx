@@ -1,3 +1,4 @@
+import { GuidedTour } from "@/components/guided-tour";
 import { Particles } from "@/components/particles";
 import Image from "next/image";
 
@@ -37,6 +38,7 @@ export default function Home() {
       </div>
       {/* <ProductDataExtractor />
       <GuidedTour /> */}
+      <GuidedTour />
     </div>
   </main>
 
