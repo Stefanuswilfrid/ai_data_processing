@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, JSX } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, CheckCircle, AlertCircle } from "lucide-react"
@@ -23,6 +23,7 @@ interface ToastOptions {
 
 interface ToastContextValue {
   toast: (options: ToastOptions) => void
+  ToastContainer?: JSX.Element
 }
 
 export function useToast(): ToastContextValue {
