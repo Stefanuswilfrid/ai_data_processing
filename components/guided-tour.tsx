@@ -75,17 +75,15 @@ export function GuidedTour() {
       if (target) {
         setTargetElement(target);
 
-        // ✅ Scroll it into view if it's not visible
         target.scrollIntoView({
           behavior: "smooth",
-          block: "center", // or "nearest" / "start" depending on desired alignment
+          block: "center", 
         });
       }
     }
   }, [currentStep, isOpen]);
 
   useEffect(() => {
-    // Check if this is the user's first visit
     if (!tourCompleted && !hasSeenTour) {
       const timer = setTimeout(() => {
         setIsOpen(true);
@@ -138,7 +136,6 @@ export function GuidedTour() {
   const step = tourSteps[currentStep];
   const rect = targetElement.getBoundingClientRect();
 
-  // Calculate tooltip position based on placement
   let tooltipStyle: React.CSSProperties = {};
   const offset = 12;
 

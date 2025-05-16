@@ -61,8 +61,13 @@ export async function extractProductData(
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   })
 
+  console.log("BLOB TOKEN:", process.env.BLOB_READ_WRITE_TOKEN)
+
+
   const { url } = await put(`product_data_${Date.now()}.xlsx`, file, {
     access: "public",
+    token: process.env.BLOB_READ_WRITE_TOKEN,
+
   })
   logger.info(`Excel file uploaded to ${url}`)
 

@@ -22,10 +22,8 @@ export function DataPreview({ data }: DataPreviewProps) {
 
   if (!data.length) return null
 
-  // Get all unique keys from all objects
   const allKeys = Array.from(new Set(data.flatMap((item) => Object.keys(item))))
 
-  // Filter data based on search term
   const filteredData = searchTerm
     ? data.filter((item) =>
         Object.values(item).some((value) => value && String(value).toLowerCase().includes(searchTerm.toLowerCase())),

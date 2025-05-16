@@ -17,7 +17,7 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
     } catch (error) {
       console.warn("Error setting localStorage", error)
     }
-  }, [key, storedValue]) // ✅ only rerun when value actually changes
+  }, [key, storedValue])  
 
   return [storedValue, setStoredValue] as const
 }

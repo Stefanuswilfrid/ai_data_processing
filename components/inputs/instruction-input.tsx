@@ -46,7 +46,6 @@ export function InstructionInput({ value, onChange }: InstructionInputProps) {
     })
   }, [onChange, toast])
 
-  // Only update selectedExample if value changes and doesn't match current selection
   useEffect(() => {
     const matched = INSTRUCTION_TEMPLATES.find((t) => t.value === value)
     // Only update if we’re not already matching
@@ -54,7 +53,7 @@ export function InstructionInput({ value, onChange }: InstructionInputProps) {
       setSelectedExample(matched.label)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]) // ✅ intentionally leave selectedExample out
+  }, [value]) 
   
   
 
