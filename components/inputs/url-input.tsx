@@ -66,7 +66,7 @@ export function UrlInput({ urls, setUrls, onUrlSelect, activeUrl }: UrlInputProp
     if (activeUrl === urlToRemove && newUrls.length > 0) {
       onUrlSelect(newUrls[0])
     } else if (newUrls.length === 0) {
-      onUrlSelect(null)
+      onUrlSelect("")
     }
   }
 
