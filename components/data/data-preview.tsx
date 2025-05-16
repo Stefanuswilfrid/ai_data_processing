@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { ProductData } from "@/lib/types"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight, ExternalLink, Search, Copy } from "lucide-react"
+import { ChevronLeft, ChevronRight, ExternalLink, Search, Copy, AlertTriangle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 
@@ -22,8 +22,10 @@ export function DataPreview({ data }: DataPreviewProps) {
 
   if (!data.length) return null
 
+  // Get all unique keys from all objects
   const allKeys = Array.from(new Set(data.flatMap((item) => Object.keys(item))))
 
+  // Filter data based on search term
   const filteredData = searchTerm
     ? data.filter((item) =>
         Object.values(item).some((value) => value && String(value).toLowerCase().includes(searchTerm.toLowerCase())),
@@ -87,12 +89,22 @@ export function DataPreview({ data }: DataPreviewProps) {
           </TableHeader>
           <TableBody>
             {currentData.map((item, index) => (
-              <TableRow key={index} className="hover:bg-slate-800/30 border-slate-700/50">
+              <TableRow
+                key={index}
+                className={`hover:bg-slate-800/30 border-slate-700/50 ${item.error ? "bg-red-900/10" : ""}`}
+              >
                 <TableCell className="font-medium text-slate-300">{startIndex + index + 1}</TableCell>
                 {allKeys.map((key) => (
                   <TableCell key={key} className="text-slate-300 group relative">
-                    {renderCellContent(item[key])}
-                    {item[key] !== null && item[key] !== undefined && (
+                    {key === "error" && item[key] ? (
+                      <div className="flex items-start text-red-400">
+                        <AlertTriangle className="h-4 w-4 mr-2 flex-shrink-0 mt-0.5" />
+                        <span>{String(item[key])}</span>
+                      </div>
+                    ) : (
+                      renderCellContent(item[key])
+                    )}
+                    {item[key] !== null && item[key] !== undefined && key !== "error" && (
                       <Button
                         variant="ghost"
                         size="icon"

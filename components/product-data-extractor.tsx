@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { UrlInput } from "./inputs/url-input"
 import { InstructionInput } from "./inputs/instruction-input"
 import { Button } from "@/components/ui/button"
-import { Loader2, Table, FileSpreadsheet, HelpCircle } from "lucide-react"
+import { Loader2, Table, FileSpreadsheet, HelpCircle, AlertTriangle, Info } from "lucide-react"
 import { extractProductData } from "@/lib/services/extraction-service"
 import { DataPreview } from "./data/data-preview"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -32,6 +32,8 @@ export function ProductDataExtractor() {
   const [showSuccess, setShowSuccess] = useState(false)
   const [progress, setProgress] = useState(0)
   const [showHistory, setShowHistory] = useState(false)
+  const [processingStatus, setProcessingStatus] = useState<string>("")
+  const [currentUrlIndex, setCurrentUrlIndex] = useState<number>(0)
   const { toast } = useToast()
   const [history, setHistory] = useLocalStorage<{ date: string; urls: string[]; data: ProductData[] }[]>(
     "extraction-history",
@@ -71,24 +73,63 @@ export function ProductDataExtractor() {
     setDownloadUrl(null)
     setShowSuccess(false)
     setProgress(0)
+    setCurrentUrlIndex(0)
 
     try {
-      // Simulate progress updates
-      const progressInterval = setInterval(() => {
-        setProgress((prev) => {
-          const newProgress = prev + (100 - prev) * 0.1
-          return newProgress > 95 ? 95 : newProgress
+      // Show warning for multiple URLs
+      if (urls.length > 1) {
+        setProcessingStatus(
+          `Processing multiple URLs sequentially. This may take several minutes. Processing URL 1/${urls.length}...`,
+        )
+        toast({
+          title: "Processing multiple URLs",
+          description:
+            "URLs will be processed one by one with significant delays between each to avoid rate limits. This may take several minutes.",
+          variant: "default",
+          duration: 10000, // Show for 10 seconds
         })
-      }, 500)
+      }
+
+      // Set up progress tracking
+      let lastProgress = 0
+      const progressInterval = setInterval(
+        () => {
+          // Calculate progress based on current URL and estimated time
+          const urlProgress = 100 / urls.length
+          const baseProgress = (currentUrlIndex / urls.length) * 100
+          const currentUrlProgress = lastProgress + (urlProgress - lastProgress) * 0.1
+          lastProgress = currentUrlProgress
+
+          const totalProgress = Math.min(baseProgress + currentUrlProgress / urls.length, 95)
+          setProgress(totalProgress)
+        },
+        urls.length > 1 ? 3000 : 1000,
+      )
+
+      // Listen for URL index updates
+      const urlUpdateListener = (event: CustomEvent) => {
+        if (event.detail && typeof event.detail.index === "number") {
+          setCurrentUrlIndex(event.detail.index)
+          setProcessingStatus(`Processing URL ${event.detail.index + 1}/${urls.length}...`)
+          lastProgress = 0 // Reset progress for new URL
+        }
+      }
+
+      window.addEventListener("url-processing", urlUpdateListener as EventListener)
 
       const result = await extractProductData(urls, instruction)
 
       clearInterval(progressInterval)
+      window.removeEventListener("url-processing", urlUpdateListener as EventListener)
       setProgress(100)
+      setProcessingStatus("")
 
       setExtractedData(result.data)
       setDownloadUrl(result.downloadUrl)
       setShowSuccess(true)
+
+      // Count successful extractions
+      const successCount = result.data.filter((item) => !item.error).length
 
       // Add to history
       setHistory([
@@ -98,7 +139,8 @@ export function ProductDataExtractor() {
 
       toast({
         title: "Data extraction complete",
-        description: `Successfully extracted data from ${result.data.length} URLs`,
+        description: `Successfully extracted data from ${successCount}/${urls.length} URLs`,
+        variant: successCount === urls.length ? "success" : "default",
       })
     } catch (err) {
       console.error(err)
@@ -111,11 +153,21 @@ export function ProductDataExtractor() {
     } finally {
       setIsExtracting(false)
       setProgress(0)
+      setProcessingStatus("")
+      setCurrentUrlIndex(0)
     }
   }
 
   const handleUrlSelect = (url: string) => {
     setActiveUrl(url)
+  }
+
+  // Calculate estimated time based on number of URLs
+  const getEstimatedTime = () => {
+    if (urls.length <= 1) return "about 30 seconds"
+    if (urls.length <= 3) return "2-5 minutes"
+    if (urls.length <= 5) return "5-10 minutes"
+    return "10+ minutes"
   }
 
   return (
@@ -152,7 +204,7 @@ export function ProductDataExtractor() {
                   </div>
                   <h2 className="text-xl font-semibold text-white">Input Sources</h2>
                 </div>
-                {/* <TooltipProvider>
+                <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -171,10 +223,35 @@ export function ProductDataExtractor() {
                       </p>
                     </TooltipContent>
                   </Tooltip>
-                </TooltipProvider> */}
+                </TooltipProvider>
               </div>
               <div className="space-y-6">
                 <UrlInput urls={urls} setUrls={setUrls} onUrlSelect={handleUrlSelect} activeUrl={activeUrl} />
+
+                {urls.length > 1 && (
+                  <Alert className="bg-amber-900/20 border-amber-800/50 text-amber-200">
+                    <AlertTriangle className="h-4 w-4 mr-2" />
+                    <AlertDescription>
+                      <span className="font-medium">Processing multiple URLs will take {getEstimatedTime()}</span>
+                      <br />
+                      <span className="text-xs">
+                        Due to API rate limits, URLs are processed one at a time with delays between each.
+                      </span>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {urls.length > 3 && (
+                  <Alert className="bg-blue-900/20 border-blue-800/50 text-blue-200">
+                    <Info className="h-4 w-4 mr-2" />
+                    <AlertDescription>
+                      <span className="text-xs">
+                        Tip: For better results, process URLs in smaller batches of 2-3 at a time.
+                      </span>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 <div className="flex justify-between">
                   <SampleDataButton
                     onSelect={(sampleUrls) => {
@@ -292,6 +369,10 @@ export function ProductDataExtractor() {
                     ></div>
                   )}
                 </div>
+
+                {processingStatus && (
+                  <p className="text-xs text-amber-300 text-center mt-2 animate-pulse">{processingStatus}</p>
+                )}
 
                 <div className="text-xs text-slate-400 text-center">
                   Pro tip: Press{" "}
@@ -427,7 +508,7 @@ export function ProductDataExtractor() {
                         </li>
                         <li className="flex items-start">
                           <span className="text-indigo-400 mr-2">•</span>
-                          Try the sample data button to see how it works
+                          Process URLs in smaller batches of 2-3 at a time
                         </li>
                         <li className="flex items-start">
                           <span className="text-indigo-400 mr-2">•</span>
@@ -465,6 +546,7 @@ export function ProductDataExtractor() {
                     toast({
                       title: `Exported as ${format.toUpperCase()}`,
                       description: "Your data has been exported successfully",
+                      variant: "success",
                     })
                   }}
                 />
@@ -494,8 +576,8 @@ export function ProductDataExtractor() {
                 </div>
                 <p className="mt-6 text-slate-300 font-medium">Extracting data from URLs...</p>
                 <p className="text-sm text-slate-400 mt-2 max-w-md text-center">
-                  Our AI is analyzing the content and extracting structured data according to your instructions. This
-                  may take a minute depending on the number of URLs.
+                  {processingStatus ||
+                    "Our AI is analyzing the content and extracting structured data according to your instructions."}
                 </p>
                 <div className="w-full max-w-md mt-6 bg-slate-700/30 rounded-full h-2.5">
                   <div
@@ -504,6 +586,13 @@ export function ProductDataExtractor() {
                   ></div>
                 </div>
                 <p className="text-xs text-slate-400 mt-2">{Math.round(progress)}% complete</p>
+                {urls.length > 1 && (
+                  <p className="text-xs text-slate-400 mt-4">
+                    Processing URL {currentUrlIndex + 1} of {urls.length}
+                    <br />
+                    <span className="text-amber-400">This may take {getEstimatedTime()} to complete all URLs</span>
+                  </p>
+                )}
               </div>
             ) : extractedData.length > 0 ? (
               <>
@@ -529,7 +618,24 @@ export function ProductDataExtractor() {
                       </div>
                       <div className="ml-3">
                         <p className="text-sm font-medium">
-                          Successfully extracted data from {extractedData.length} URLs
+                          Extraction complete. {extractedData.filter((item) => !item.error).length} of{" "}
+                          {extractedData.length} URLs processed successfully.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {extractedData.some((item) => item.error) && (
+                  <div className="mb-6 bg-amber-900/20 border border-amber-800/50 rounded-xl p-4 text-amber-200">
+                    <div className="flex items-start">
+                      <div className="flex-shrink-0 mt-0.5">
+                        <AlertTriangle className="h-5 w-5 text-amber-400" />
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm font-medium">Some URLs could not be processed due to rate limits</p>
+                        <p className="mt-1 text-xs">
+                          Try processing fewer URLs at once (2-3 maximum) or try again later.
                         </p>
                       </div>
                     </div>
@@ -545,6 +651,7 @@ export function ProductDataExtractor() {
                         toast({
                           title: `Exported as ${format.toUpperCase()}`,
                           description: "Your data has been exported successfully",
+                          variant: "success",
                         })
                       }}
                     />
@@ -583,7 +690,6 @@ export function ProductDataExtractor() {
           </motion.div>
         )}
       </div>
-      {/* <Particles /> */}
     </ErrorBoundary>
   )
 }
