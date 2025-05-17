@@ -4,6 +4,7 @@ import { generateText } from "ai"
 import { openai } from "@ai-sdk/openai"
 import { logger } from "@/lib/utils/logger"
 import type { ProductData } from "@/lib/types"
+import { extractColesProductHtml, extractWoolworthsProductHtml } from "@/lib/utils/html-extractor"
 
 /**
  * Extract the most relevant parts of HTML for product information
@@ -23,6 +24,16 @@ function extractRelevantHtml(html: string, url: string): string {
       return extractJBHiFiProductHtml(html)
     } else if (domain.includes("walmart")) {
       return extractWalmartProductHtml(html)
+    } else if (domain.includes("coles.com.au")) {
+      // Use the Coles-specific extraction function from html-extractor.ts
+      const colesHtml = extractColesProductHtml(html)
+      logger.info(`Extracted Coles-specific HTML (${colesHtml.length} bytes)`)
+      return colesHtml
+    } else if (domain.includes("woolworths.com.au")) {
+      // Use the Woolworths-specific extraction function from html-extractor.ts
+      const woolworthsHtml = extractWoolworthsProductHtml(html)
+      logger.info(`Extracted Woolworths-specific HTML (${woolworthsHtml.length} bytes)`)
+      return woolworthsHtml
     }
 
     // Generic extraction for unknown sites
@@ -225,6 +236,8 @@ function generateSiteSpecificPrompt(url: string, instruction: string, html: stri
   else if (domain.includes("walmart")) siteName = "Walmart"
   else if (domain.includes("ebay")) siteName = "eBay"
   else if (domain.includes("target")) siteName = "Target"
+  else if (domain.includes("woolworths")) siteName = "Woolworths"
+  else if (domain.includes("coles")) siteName = "Coles"
 
   // Base prompt template that prioritizes user instructions
   const promptTemplate = `
@@ -242,6 +255,9 @@ IMPORTANT EXTRACTION GUIDELINES:
 - Format prices as strings with currency symbols (e.g., "$1,299.99")
 - If there are multiple prices shown, use the actual current selling price, not RRP/MSRP
 - Return all data in a clean JSON format
+- IMPORTANT: For nutritional information, ingredients, or any complex data, return it as a SIMPLE STRING, not as an object or nested structure
+- For nutritional information, format it as a simple comma-separated string (e.g., "Energy: 100kJ, Protein: 5g, Fat: 2g")
+- For ingredients, format as a simple comma-separated string (e.g., "Sugar, Cocoa Butter, Milk Solids")
 
 HTML CONTENT:
 ${html}
@@ -290,9 +306,25 @@ function parseProductData(text: string, url: string): ProductData {
     // Copy all fields from parsedData, ensuring they're strings if they're objects
     Object.entries(parsedData).forEach(([key, value]) => {
       if (typeof value === "object" && value !== null) {
-        result[key] = typeof value === 'string' || typeof value === 'number' || value === null ? value : String(value)
+        // Convert objects to strings
+        if (Array.isArray(value)) {
+          // If it's an array, join it with commas
+          result[key] = value.join(", ")
+        } else {
+          // If it's an object, stringify it in a readable format
+          try {
+            // Try to convert object to a readable string format
+            const entries = Object.entries(value)
+              .map(([k, v]) => `${k}: ${v}`)
+              .join(", ")
+            result[key] = entries
+          } catch (e) {
+            // Fallback to JSON.stringify if the above fails
+            result[key] = JSON.stringify(value)
+          }
+        }
       } else {
-        result[key] = typeof value === 'string' || typeof value === 'number' || value === null ? value : String(value)
+        result[key] = value
       }
     })
 
@@ -321,15 +353,31 @@ function parseProductData(text: string, url: string): ProductData {
         // Create result with source URL
         const result: ProductData = {
           sourceUrl: url,
-          _salvaged: "true",
+          _salvaged: true,
         }
 
         // Copy all fields, ensuring they're strings if they're objects
         Object.entries(salvageData).forEach(([key, value]) => {
           if (typeof value === "object" && value !== null) {
-        result[key] = typeof value === 'string' || typeof value === 'number' || value === null ? value : String(value)
+            // Convert objects to strings
+            if (Array.isArray(value)) {
+              // If it's an array, join it with commas
+              result[key] = value.join(", ")
+            } else {
+              // If it's an object, stringify it in a readable format
+              try {
+                // Try to convert object to a readable string format
+                const entries = Object.entries(value)
+                  .map(([k, v]) => `${k}: ${v}`)
+                  .join(", ")
+                result[key] = entries
+              } catch (e) {
+                // Fallback to JSON.stringify if the above fails
+                result[key] = JSON.stringify(value)
+              }
+            }
           } else {
-        result[key] = typeof value === 'string' || typeof value === 'number' || value === null ? value : String(value)
+            result[key] = value
           }
         })
 

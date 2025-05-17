@@ -1,4 +1,5 @@
 export type ProductData = {
-    [key: string]: string | number | null
+    _salvaged?: boolean;
+    [key: string]: any;
 }
   

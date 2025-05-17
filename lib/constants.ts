@@ -28,6 +28,11 @@ export const INSTRUCTION_TEMPLATES = [
       value:
         "Extract the following information: Title, Author, Publisher, Publication Date, ISBN, Price, Format (hardcover, paperback, etc.), Page Count, and Book Description.",
     },
+    {
+      label: "Alcoholic Drinks",
+      value:
+        "Extract the following information: Product Name, Brand, Alcohol Percentage (ABV), Volume (e.g., 700ml), Price, Type of Alcohol (e.g., Beer, Wine, Spirits), Origin Country, and Description.",
+    },
 ]
 
 
@@ -37,6 +42,7 @@ export const SAMPLE_URLS = {
     "https://www.amazon.com.au/Apple-iPhone-Pro-Max-512GB/dp/B0B1DCBH5N",
     "https://www.jbhifi.com.au/products/apple-iphone-15-128gb-black?store=41&gad_source=1&gad_campaignid=17415673174&gbraid=0AAAAAD23EqpczcCU5c4VDY4umki4UD1-M&gclid=Cj0KCQjwxJvBBhDuARIsAGUgNfjrV9yKBcNzAlFHswjV3JqSj8HbXTeonuwbhPXP-NLVXNzxNAIn7oUaArbVEALw_wcB",
     "https://www.walmart.com/ip/Sony-WH-1000XM4-Wireless-Noise-Canceling-Over-the-Ear-Headphones-with-Google-Assistant-Black/310157752",
+    "https://www.kmart.com.au/product/samsung-galaxy-a16-5g-128gb-smartphone-blue-43527625/"
  
   ],
   grocery: [
@@ -47,6 +53,10 @@ export const SAMPLE_URLS = {
   fashion: [
     "https://www.target.com.au/p/australian-cotton-classic-crew-neck-t-shirt/69768248",
     "https://www.kmart.com.au/product/shapewear-jeans-s161397/",
-    "https://www.theiconic.com.au/air-force-1-07-men-s-2352119.html",
+    "https://www.uniqlo.com/au/en/products/E465185-000?colorCode=COL02&sizeCode=SMA007",
+  ],
+  alcoholic: [
+    "https://bws.com.au/product/101473-tanqueray-london-dry-gin-700ml",
+    "https://www.coles.com.au/product/penfolds-koonunga-hill-shiraz-cabernet-750ml-2620682"
   ],
 };

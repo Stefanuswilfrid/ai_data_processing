@@ -17,9 +17,7 @@ export async function GET() {
           const progress = await getExtractionProgress()
 
           // Format the data as an SSE event
-          const data = `data: ${JSON.stringify({ type: "progress", progress })}
-
-`
+          const data = `data: ${JSON.stringify({ type: "progress", progress })}\n\n`
 
           try {
             controller.enqueue(new TextEncoder().encode(data))
@@ -34,28 +32,20 @@ export async function GET() {
           } else {
             // Send one final update
             try {
-              setTimeout(() => {
-                try {
-                  controller.enqueue(
-                    new TextEncoder().encode(`data: ${JSON.stringify({ type: "complete" })}
-
-`),
-                  )
-                  controller.close()
-                } catch (closeError) {
-                  console.error("Error sending final update:", closeError)
-                }
-              }, 2000)
-            } catch (error) {
-              console.error("Error setting timeout for final update:", error)
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: "complete" })}\n\n`))
+              controller.close()
+            } catch (closeError) {
+              console.error("Error sending final update:", closeError)
             }
           }
         } catch (error) {
           console.error("Error sending progress:", error)
           try {
-            controller.error(error)
+            // Don't call controller.error as it can cause issues
+            // Just close the controller
+            controller.close()
           } catch (controllerError) {
-            console.error("Error calling controller.error:", controllerError)
+            console.error("Error closing controller:", controllerError)
           }
         }
       }

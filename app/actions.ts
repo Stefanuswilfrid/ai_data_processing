@@ -151,9 +151,15 @@ export async function extractProductData(
       // Generate site-specific prompt
       const prompt = generateEcommercePrompt(url, instruction, relevantHtml)
 
+      // Always use GPT-4o for Coles products
+      const domain = new URL(url).hostname.toLowerCase()
+      const model = domain.includes("coles.com.au") ? "gpt-4o" : "gpt-3.5-turbo"
+
+      logger.info(`Using ${model} for extraction from ${url}`)
+
       // Extract data with AI
       const { text } = await generateText({
-        model: openai("gpt-4o"),
+        model: openai(model),
         prompt,
         temperature: 0.1, // Lower temperature for more consistent results
         maxTokens: 2000,

@@ -124,36 +124,18 @@ function extractWoolworthsProductHtml(html: string): string {
 
 function extractColesProductHtml(html: string): string {
   try {
-    // Try to extract product details section
-    const productDetailsMatch = html.match(/<div[^>]*class=["']?product-details[^"']*["']?[^>]*>([\s\S]*?)<\/div>/i)
-    if (productDetailsMatch && productDetailsMatch[1] && productDetailsMatch[1].length > 500) {
-      return productDetailsMatch[1]
-    }
+    // For Coles, we'll take a different approach - just return the entire HTML
+    // This ensures we don't miss any important data
+    // We'll let the AI model extract the relevant information
 
-    // Try to extract product information sections
-    let extractedParts = ""
+    // Just clean up the HTML to remove scripts and styles
+    const cleanedHtml = html
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+      .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, "")
 
-    // Extract product title
-    const titleMatch = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)
-    if (titleMatch && titleMatch[0]) {
-      extractedParts += titleMatch[0]
-    }
-
-    // Extract price
-    const priceMatch = html.match(/<div[^>]*class=["']?price[^"']*["']?[^>]*>([\s\S]*?)<\/div>/i)
-    if (priceMatch && priceMatch[0]) {
-      extractedParts += priceMatch[0]
-    }
-
-    // Extract product description
-    const descMatch = html.match(/<div[^>]*class=["']?product-description[^"']*["']?[^>]*>([\s\S]*?)<\/div>/i)
-    if (descMatch && descMatch[0]) {
-      extractedParts += descMatch[0]
-    }
-
-    if (extractedParts.length > 500) {
-      return extractedParts
-    }
+    // Truncate to a reasonable size
+    return cleanedHtml.substring(0, 50000)
   } catch (e) {
     logger.warn(`Error in Coles extraction: ${e}`)
   }

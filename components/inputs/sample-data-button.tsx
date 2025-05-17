@@ -28,7 +28,7 @@ export function SampleDataButton({ onSelect }: SampleDataButtonProps) {
           className="focus:bg-indigo-600 focus:text-white cursor-pointer"
           onClick={() => onSelect(SAMPLE_URLS.electronics)}
         >
-          Electronics (3 URLs)
+          Electronics (4 URLs)
         </DropdownMenuItem>
         <DropdownMenuItem
           className="focus:bg-indigo-600 focus:text-white cursor-pointer"
@@ -41,6 +41,12 @@ export function SampleDataButton({ onSelect }: SampleDataButtonProps) {
           onClick={() => onSelect(SAMPLE_URLS.fashion)}
         >
           Fashion (3 URLs)
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className="focus:bg-indigo-600 focus:text-white cursor-pointer"
+          onClick={() => onSelect(SAMPLE_URLS.alcoholic)}
+        >
+          Alcoholic (2 URLs)
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
