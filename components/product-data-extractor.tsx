@@ -5,7 +5,7 @@ import { UrlInput } from "./inputs/url-input"
 import { InstructionInput } from "./inputs/instruction-input"
 import { Button } from "@/components/ui/button"
 import { Loader2, Table, FileSpreadsheet, HelpCircle, AlertTriangle, Info } from "lucide-react"
-import { extractProductData } from "@/lib/services/extraction-service"
+import { extractProductData, cancelExtraction, resetCancellation } from "@/app/actions"
 import { DataPreview } from "./data/data-preview"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -20,6 +20,7 @@ import { ExportOptions } from "./data/export-options"
 import { KeyboardShortcuts } from "./keyboard-shortcuts"
 import type { ProductData } from "@/lib/types"
 import { useMobile } from "@/hooks/use-mobile"
+import { Progress } from "@/components/ui/progress"
 
 export function ProductDataExtractor() {
   const [urls, setUrls] = useState<string[]>([])
@@ -30,16 +31,64 @@ export function ProductDataExtractor() {
   const [activeUrl, setActiveUrl] = useState<string | null>(null)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
-  const [progress, setProgress] = useState(0)
   const [showHistory, setShowHistory] = useState(false)
   const [processingStatus, setProcessingStatus] = useState<string>("")
-  const [currentUrlIndex, setCurrentUrlIndex] = useState<number>(0)
   const { toast } = useToast()
   const [history, setHistory] = useLocalStorage<{ date: string; urls: string[]; data: ProductData[] }[]>(
     "extraction-history",
     [],
   )
   const isMobile = useMobile()
+
+  // Replace the progress tracking section with the previous implementation:
+
+  // Progress tracking
+  const [progress, setProgress] = useState({
+    currentUrl: "",
+    currentUrlIndex: 0,
+    totalUrls: 0,
+    status: "",
+    percent: 0,
+  })
+
+  // Listen for progress updates from server
+  useEffect(() => {
+    const handleProgressUpdate = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === "progress") {
+          setProgress(data.progress)
+          setProcessingStatus(data.progress.status)
+        }
+      } catch (e) {
+        console.error("Error parsing progress event:", e)
+      }
+    }
+
+    // Setup event source for progress updates
+    let eventSource: EventSource | null = null
+
+    if (isExtracting) {
+      eventSource = new EventSource("/api/extraction-progress")
+      eventSource.onmessage = handleProgressUpdate
+      eventSource.onerror = () => {
+        if (eventSource) {
+          eventSource.close()
+        }
+      }
+    }
+
+    return () => {
+      if (eventSource) {
+        eventSource.close()
+      }
+    }
+  }, [isExtracting])
+
+  // Simple client-side progress tracking
+  // const [currentUrlIndex, setCurrentUrlIndex] = useState(0)
+  // const [totalUrls, setTotalUrls] = useState(0)
+  // const [currentUrl, setCurrentUrl] = useState("")
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -50,11 +99,23 @@ export function ProductDataExtractor() {
           handleSubmit()
         }
       }
+
+      // Escape to cancel extraction
+      if (e.key === "Escape" && isExtracting) {
+        handleCancel()
+      }
     }
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [urls, instruction, isExtracting])
+
+  // Reset cancellation when component unmounts
+  useEffect(() => {
+    return () => {
+      resetCancellation()
+    }
+  }, [])
 
   const handleSubmit = async () => {
     if (urls.length === 0) {
@@ -72,61 +133,58 @@ export function ProductDataExtractor() {
     setExtractedData([])
     setDownloadUrl(null)
     setShowSuccess(false)
-    setProgress(0)
-    setCurrentUrlIndex(0)
+
+    // Reset progress
+    // setCurrentUrlIndex(0)
+    // setTotalUrls(urls.length)
+    // setCurrentUrl("")
+    setProcessingStatus("Initializing extraction...")
 
     try {
       // Show warning for multiple URLs
       if (urls.length > 1) {
-        setProcessingStatus(
-          `Processing multiple URLs sequentially. This may take several minutes. Processing URL 1/${urls.length}...`,
-        )
         toast({
           title: "Processing multiple URLs",
           description:
-            "URLs will be processed one by one with significant delays between each to avoid rate limits. This may take several minutes.",
+            "URLs will be processed one by one to ensure accurate data extraction. This may take a few minutes.",
           variant: "default",
-          duration: 10000, // Show for 10 seconds
+          duration: 10000,
         })
       }
 
-      // Set up progress tracking
-      let lastProgress = 0
-      const progressInterval = setInterval(
-        () => {
-          // Calculate progress based on current URL and estimated time
-          const urlProgress = 100 / urls.length
-          const baseProgress = (currentUrlIndex / urls.length) * 100
-          const currentUrlProgress = lastProgress + (urlProgress - lastProgress) * 0.1
-          lastProgress = currentUrlProgress
+      // Set up a progress tracker using a worker or interval
+      // let progressInterval: NodeJS.Timeout | null = null
 
-          const totalProgress = Math.min(baseProgress + currentUrlProgress / urls.length, 95)
-          setProgress(totalProgress)
-        },
-        urls.length > 1 ? 3000 : 1000,
-      )
-
-      // Listen for URL index updates
-      const urlUpdateListener = (event: CustomEvent) => {
-        if (event.detail && typeof event.detail.index === "number") {
-          setCurrentUrlIndex(event.detail.index)
-          setProcessingStatus(`Processing URL ${event.detail.index + 1}/${urls.length}...`)
-          lastProgress = 0 // Reset progress for new URL
-        }
-      }
-
-      window.addEventListener("url-processing", urlUpdateListener as EventListener)
+      // if (urls.length > 1) {
+      //   // Simulate progress updates for each URL
+      //   progressInterval = setInterval(() => {
+      //     // This is just a simulation - in a real app, you'd get actual progress from the server
+      //     setCurrentUrlIndex((prev) => {
+      //       // Don't exceed the actual number of URLs
+      //       if (prev < urls.length) {
+      //         setCurrentUrl(urls[prev])
+      //         setProcessingStatus(`Processing ${urls[prev]}...`)
+      //         return prev
+      //       }
+      //       return prev
+      //     })
+      //   }, 5000) // Update every 5 seconds
+      // }
 
       const result = await extractProductData(urls, instruction)
 
-      clearInterval(progressInterval)
-      window.removeEventListener("url-processing", urlUpdateListener as EventListener)
-      setProgress(100)
-      setProcessingStatus("")
+      // Clear the interval when done
+      // if (progressInterval) {
+      //   clearInterval(progressInterval)
+      // }
 
       setExtractedData(result.data)
       setDownloadUrl(result.downloadUrl)
       setShowSuccess(true)
+
+      // Set progress to complete
+      // setCurrentUrlIndex(urls.length)
+      setProcessingStatus("Extraction complete!")
 
       // Count successful extractions
       const successCount = result.data.filter((item) => !item.error).length
@@ -142,19 +200,41 @@ export function ProductDataExtractor() {
         description: `Successfully extracted data from ${successCount}/${urls.length} URLs`,
         variant: successCount === urls.length ? "success" : "default",
       })
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
-      setError("Failed to extract data. Please check your URLs and try again.")
-      toast({
-        variant: "destructive",
-        title: "Extraction failed",
-        description: "There was a problem extracting data from the provided URLs.",
-      })
+
+      // Don't show error if it was cancelled
+      if (err.message !== "Extraction cancelled") {
+        setError("Failed to extract data. Please check your URLs and try again.")
+        toast({
+          variant: "destructive",
+          title: "Extraction failed",
+          description: "There was a problem extracting data from the provided URLs.",
+        })
+      } else {
+        toast({
+          title: "Extraction cancelled",
+          description: "The data extraction process has been cancelled.",
+          variant: "default",
+        })
+      }
     } finally {
       setIsExtracting(false)
-      setProgress(0)
-      setProcessingStatus("")
-      setCurrentUrlIndex(0)
+    }
+  }
+
+  const handleCancel = async () => {
+    if (isExtracting) {
+      try {
+        await cancelExtraction()
+        toast({
+          title: "Cancelling extraction...",
+          description: "The data extraction process is being cancelled.",
+          variant: "default",
+        })
+      } catch (error) {
+        console.error("Error cancelling extraction:", error)
+      }
     }
   }
 
@@ -165,10 +245,13 @@ export function ProductDataExtractor() {
   // Calculate estimated time based on number of URLs
   const getEstimatedTime = () => {
     if (urls.length <= 1) return "about 30 seconds"
-    if (urls.length <= 3) return "2-5 minutes"
-    if (urls.length <= 5) return "5-10 minutes"
-    return "10+ minutes"
+    if (urls.length <= 3) return "1-3 minutes"
+    if (urls.length <= 5) return "3-5 minutes"
+    return "5+ minutes"
   }
+
+  // Calculate progress percentage
+  const progressPercent = progress.totalUrls > 0 ? Math.round((progress.currentUrlIndex / progress.totalUrls) * 100) : 0
 
   return (
     <ErrorBoundary>
@@ -202,7 +285,7 @@ export function ProductDataExtractor() {
                       <path d="M12 2v10"></path>
                     </svg>
                   </div>
-                  <h2 className="text-xl font-semibold text-white">Input Sources</h2>
+                  <h2 className="text-xl font-semibold text-white">Product URLs</h2>
                 </div>
                 <TooltipProvider>
                   <Tooltip>
@@ -218,8 +301,8 @@ export function ProductDataExtractor() {
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="max-w-xs">
-                        Enter URLs from e-commerce sites like Amazon, eBay, Walmart, etc. You can add multiple URLs to
-                        process in batch.
+                        Enter URLs from e-commerce sites like Coles, Woolworths, BWS, Kmart, Target, etc. You can add
+                        multiple URLs to process in sequence.
                       </p>
                     </TooltipContent>
                   </Tooltip>
@@ -235,7 +318,7 @@ export function ProductDataExtractor() {
                       <span className="font-medium">Processing multiple URLs will take {getEstimatedTime()}</span>
                       <br />
                       <span className="text-xs">
-                        Due to API rate limits, URLs are processed one at a time with delays between each.
+                        URLs will be processed one at a time to ensure accurate data extraction.
                       </span>
                     </AlertDescription>
                   </Alert>
@@ -246,7 +329,7 @@ export function ProductDataExtractor() {
                     <Info className="h-4 w-4 mr-2" />
                     <AlertDescription>
                       <span className="text-xs">
-                        Tip: For better results, process URLs in smaller batches of 2-3 at a time.
+                        Tip: For faster results, process URLs in smaller batches of 2-3 at a time.
                       </span>
                     </AlertDescription>
                   </Alert>
@@ -331,55 +414,74 @@ export function ProductDataExtractor() {
                 )}
 
                 <div className="relative">
-                  <Button
-                    onClick={handleSubmit}
-                    disabled={isExtracting || urls.length === 0 || !instruction}
-                    className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-indigo-500/20"
-                    data-tour="extract-button"
-                  >
-                    {isExtracting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Extracting data... {progress > 0 ? `${Math.round(progress)}%` : ""}
-                      </>
-                    ) : (
-                      <>
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="mr-2"
-                        >
-                          <path d="m8 3 4 8 5-5 5 15H2L8 3z"></path>
-                        </svg>
-                        Extract Product Data
-                      </>
-                    )}
-                  </Button>
-                  {isExtracting && (
-                    <div
-                      className="absolute bottom-0 left-0 h-1 bg-indigo-500 rounded-full transition-all duration-300"
-                      style={{ width: `${progress}%` }}
-                    ></div>
+                  {isExtracting ? (
+                    <div className="flex space-x-2">
+                      <Button disabled className="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 text-white">
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Extracting data... {progressPercent > 0 ? `${progressPercent}%` : ""}
+                        </>
+                      </Button>
+
+                      <Button variant="destructive" onClick={handleCancel} className="bg-red-600 hover:bg-red-700">
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      onClick={handleSubmit}
+                      disabled={isExtracting || urls.length === 0 || !instruction}
+                      className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-indigo-500/20"
+                      data-tour="extract-button"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="mr-2"
+                      >
+                        <path d="m8 3 4 8 5-5 5 15H2L8 3z"></path>
+                      </svg>
+                      Extract Product Data
+                    </Button>
                   )}
                 </div>
 
-                {processingStatus && (
-                  <p className="text-xs text-amber-300 text-center mt-2 animate-pulse">{processingStatus}</p>
+                {isExtracting && (
+                  <div className="space-y-2 mt-4">
+                    <Progress value={progress.percent > 0 ? progress.percent : 5} className="h-2" />
+
+                    <div className="flex justify-between text-xs text-slate-400">
+                      <span>
+                        Processing URL {progress.currentUrlIndex + 1} of {progress.totalUrls}
+                      </span>
+                      <span>{progress.percent > 0 ? Math.round(progress.percent) : 5}%</span>
+                    </div>
+
+                    <div className="text-xs text-amber-300 text-center animate-pulse">{processingStatus}</div>
+
+                    {progress.currentUrl && (
+                      <div className="text-xs text-slate-400 truncate">
+                        <span className="text-slate-500">Current URL:</span> {progress.currentUrl}
+                      </div>
+                    )}
+                  </div>
                 )}
 
-                <div className="text-xs text-slate-400 text-center">
-                  Pro tip: Press{" "}
-                  <kbd className="px-1 py-0.5 bg-slate-700 rounded border border-slate-600 mx-1">Ctrl</kbd> +{" "}
-                  <kbd className="px-1 py-0.5 bg-slate-700 rounded border border-slate-600 mx-1">Enter</kbd> to extract
-                  data
-                </div>
+                {!isExtracting && (
+                  <div className="text-xs text-slate-400 text-center">
+                    Pro tip: Press{" "}
+                    <kbd className="px-1 py-0.5 bg-slate-700 rounded border border-slate-600 mx-1">Ctrl</kbd> +{" "}
+                    <kbd className="px-1 py-0.5 bg-slate-700 rounded border border-slate-600 mx-1">Enter</kbd> to
+                    extract data
+                  </div>
+                )}
               </div>
             </motion.div>
           </motion.div>
@@ -444,8 +546,8 @@ export function ProductDataExtractor() {
                         Add Product URLs
                       </h3>
                       <p className="text-sm">
-                        Enter URLs from e-commerce sites like Coles, Woolworths, Kmart, or Target. Add multiple URLs to
-                        process in batch.
+                        Enter URLs from e-commerce sites like Coles, Woolworths, BWS, Kmart, or Target. Add multiple
+                        URLs to process in sequence.
                       </p>
                     </div>
 
@@ -471,7 +573,7 @@ export function ProductDataExtractor() {
                       </h3>
                       <p className="text-sm">
                         Click "Extract Product Data" and wait for processing. Review the extracted data and download as
-                        Excel.
+                        Excel, CSV, or JSON.
                       </p>
                     </div>
                   </div>
@@ -582,13 +684,15 @@ export function ProductDataExtractor() {
                 <div className="w-full max-w-md mt-6 bg-slate-700/30 rounded-full h-2.5">
                   <div
                     className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"
-                    style={{ width: `${progress}%` }}
+                    style={{ width: `${progress.percent > 0 ? progress.percent : 5}%` }}
                   ></div>
                 </div>
-                <p className="text-xs text-slate-400 mt-2">{Math.round(progress)}% complete</p>
-                {urls.length > 1 && (
+                <p className="text-xs text-slate-400 mt-2">
+                  {progress.percent > 0 ? Math.round(progress.percent) : 5}% complete
+                </p>
+                {progress.totalUrls > 1 && (
                   <p className="text-xs text-slate-400 mt-4">
-                    Processing URL {currentUrlIndex + 1} of {urls.length}
+                    Processing URL {progress.currentUrlIndex + 1} of {progress.totalUrls}
                     <br />
                     <span className="text-amber-400">This may take {getEstimatedTime()} to complete all URLs</span>
                   </p>
@@ -633,7 +737,7 @@ export function ProductDataExtractor() {
                         <AlertTriangle className="h-5 w-5 text-amber-400" />
                       </div>
                       <div className="ml-3">
-                        <p className="text-sm font-medium">Some URLs could not be processed due to rate limits</p>
+                        <p className="text-sm font-medium">Some URLs could not be processed</p>
                         <p className="mt-1 text-xs">
                           Try processing fewer URLs at once (2-3 maximum) or try again later.
                         </p>

@@ -18,6 +18,13 @@ export async function extractProductData(
 
   for (let i = 0; i < urls.length; i++) {
     const url = urls[i]
+
+    // Dispatch event for UI updates
+    if (typeof window !== "undefined") {
+      const event = new CustomEvent("url-processing", { detail: { index: i } })
+      window.dispatchEvent(event)
+    }
+
     try {
       logger.info(`Processing URL ${i + 1}/${urls.length}: ${url}`)
 
@@ -38,13 +45,24 @@ export async function extractProductData(
 
       // Process with AI with retry logic
       let retries = 0
-      const maxRetries = 5 // Increased from 3
+      const maxRetries = 3
       let extractedData: ProductData | null = null
       let waitTime = 5000 // Start with 5 seconds
 
       while (retries < maxRetries && !extractedData) {
         try {
           extractedData = await extractDataWithAI(html, url, instruction)
+
+          // Validate the data to ensure no [object Object] issues
+          if (extractedData) {
+            // Ensure all fields are strings
+            Object.keys(extractedData).forEach((key) => {
+              if (extractedData && typeof extractedData[key] === "object" && extractedData[key] !== null) {
+                extractedData[key] = JSON.stringify(extractedData[key])
+              }
+            })
+          }
+
           results.push(extractedData)
         } catch (error: any) {
           retries++
@@ -64,11 +82,11 @@ export async function extractProductData(
               }
             } catch (e) {
               // If parsing fails, use exponential backoff
-              retryAfterMs = Math.min(waitTime * Math.pow(2, retries), 120000) // Max 2 minutes
+              retryAfterMs = Math.min(waitTime * Math.pow(2, retries), 60000) // Max 1 minute
             }
 
-            // Add a buffer to the retry time and ensure it's at least 30 seconds
-            retryAfterMs = Math.max(retryAfterMs + 5000, 30000)
+            // Add a buffer to the retry time
+            retryAfterMs = Math.max(retryAfterMs + 5000, 10000)
             waitTime = retryAfterMs
 
             logger.warn(
@@ -77,7 +95,7 @@ export async function extractProductData(
             await sleep(retryAfterMs)
           } else if (retries < maxRetries) {
             // For other errors, retry with exponential backoff
-            const backoffTime = Math.min(waitTime * Math.pow(2, retries), 60000)
+            const backoffTime = Math.min(waitTime * Math.pow(2, retries), 30000)
             logger.warn(`Error processing URL, retrying in ${backoffTime / 1000} seconds (${retries}/${maxRetries})`)
             await sleep(backoffTime)
           } else {
@@ -89,10 +107,9 @@ export async function extractProductData(
         }
       }
 
-      // Add a significant delay between URLs to avoid rate limits
-      // The delay increases with each URL processed
+      // Add a delay between URLs to avoid rate limits
       if (i < urls.length - 1) {
-        const delayBetweenUrls = Math.min(30000 + i * 10000, 60000) // 30-60 seconds
+        const delayBetweenUrls = 5000 // 5 seconds
         logger.info(`Waiting ${delayBetweenUrls / 1000} seconds before processing next URL...`)
         await sleep(delayBetweenUrls)
       }
@@ -108,7 +125,19 @@ export async function extractProductData(
 
   // Generate Excel file
   const workbook = XLSX.utils.book_new()
-  const worksheet = XLSX.utils.json_to_sheet(results) // Include all results including errors
+
+  // Sanitize data for Excel
+  const sanitizedResults = results.map((result) => {
+    const sanitized = { ...result }
+    Object.keys(sanitized).forEach((key) => {
+      if (typeof sanitized[key] === "object" && sanitized[key] !== null) {
+        sanitized[key] = JSON.stringify(sanitized[key])
+      }
+    })
+    return sanitized
+  })
+
+  const worksheet = XLSX.utils.json_to_sheet(sanitizedResults)
   XLSX.utils.book_append_sheet(workbook, worksheet, "Product Data")
 
   // Convert to base64 string
@@ -120,5 +149,5 @@ export async function extractProductData(
   logger.info(`Excel file generated as data URL`)
 
   revalidatePath("/")
-  return { data: results, downloadUrl: dataUrl } // Return all results including errors
+  return { data: results, downloadUrl: dataUrl }
 }

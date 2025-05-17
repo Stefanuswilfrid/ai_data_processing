@@ -12,8 +12,20 @@ interface ExportOptionsProps {
   onExport: (format: string) => void
 }
 
-
 export function ExportOptions({ downloadUrl, data, onExport }: ExportOptionsProps) {
+  const handleExcelDownload = () => {
+    // Create a temporary anchor element
+    const link = document.createElement("a")
+    link.href = downloadUrl
+    link.download = `product_data_${Date.now()}.xlsx`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+
+    // No need to revoke the object URL for data URLs
+    onExport("excel")
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -27,13 +39,7 @@ export function ExportOptions({ downloadUrl, data, onExport }: ExportOptionsProp
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="bg-slate-800 border-slate-700 text-slate-300">
-        <DropdownMenuItem
-          className="focus:bg-indigo-600 focus:text-white cursor-pointer"
-          onClick={() => {
-            window.open(downloadUrl, "_blank")
-            onExport("excel")
-          }}
-        >
+        <DropdownMenuItem className="focus:bg-indigo-600 focus:text-white cursor-pointer" onClick={handleExcelDownload}>
           <FileSpreadsheet className="h-4 w-4 mr-2" />
           Excel (.xlsx)
         </DropdownMenuItem>

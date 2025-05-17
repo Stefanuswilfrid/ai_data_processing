@@ -32,19 +32,21 @@ export const INSTRUCTION_TEMPLATES = [
 
 
 export const SAMPLE_URLS = {
-    electronics: [
-      "https://www.amazon.com/Apple-iPhone-13-Pro-Max/dp/B09G9HD6PD",
-      "https://www.bestbuy.com/site/samsung-galaxy-s21-5g-128gb-unlocked-phantom-gray/6448113.p",
-      "https://www.walmart.com/ip/Sony-WH-1000XM4-Wireless-Noise-Cancelling-Overhead-Headphones-Black/485382896",
-    ],
-    grocery: [
-      "https://www.woolworths.com.au/shop/productdetails/36155/cadbury-dairy-milk-chocolate-block",
-      "https://shop.coles.com.au/a/national/product/coca-cola-soft-drink-can",
-      "https://www.woolworths.com.au/shop/productdetails/77589/arnott-s-tim-tam-chocolate-biscuits-original",
-    ],
-    fashion: [
-      "https://www.target.com.au/p/mens-short-sleeve-crew-neck-t-shirt/65567351",
-      "https://www.kmart.com.au/product/womens-high-waist-jeans-s135649/",
-      "https://www.theiconic.com.au/air-force-1-07-mens-shoes-1258026.html",
-    ],
-}
+  electronics: [
+
+    "https://www.amazon.com.au/Apple-iPhone-Pro-Max-512GB/dp/B0B1DCBH5N",
+    "https://www.jbhifi.com.au/products/apple-iphone-15-128gb-black?store=41&gad_source=1&gad_campaignid=17415673174&gbraid=0AAAAAD23EqpczcCU5c4VDY4umki4UD1-M&gclid=Cj0KCQjwxJvBBhDuARIsAGUgNfjrV9yKBcNzAlFHswjV3JqSj8HbXTeonuwbhPXP-NLVXNzxNAIn7oUaArbVEALw_wcB",
+    "https://www.walmart.com/ip/Sony-WH-1000XM4-Wireless-Noise-Canceling-Over-the-Ear-Headphones-with-Google-Assistant-Black/310157752",
+ 
+  ],
+  grocery: [
+    "https://www.woolworths.com.au/shop/productdetails/6006957/cadbury-dairy-milk-chocolate-block",
+    "https://www.coles.com.au/product/coca-cola-classic-soft-drink-can-250ml-2034105",
+    "https://www.woolworths.com.au/shop/productdetails/36066/arnotts-tim-tam-original-chocolate-biscuits",
+  ],
+  fashion: [
+    "https://www.target.com.au/p/australian-cotton-classic-crew-neck-t-shirt/69768248",
+    "https://www.kmart.com.au/product/shapewear-jeans-s161397/",
+    "https://www.theiconic.com.au/air-force-1-07-men-s-2352119.html",
+  ],
+};
