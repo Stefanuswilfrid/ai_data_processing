@@ -76,7 +76,7 @@ export function extractRelevantHtml(html: string, url: string): string {
 }
 
 // Site-specific extraction functions
-function extractWoolworthsProductHtml(html: string): string {
+export function extractWoolworthsProductHtml(html: string): string {
   try {
     // Try to extract product details section
     const productDetailsMatch = html.match(/<div[^>]*class=["']?product-details[^"']*["']?[^>]*>([\s\S]*?)<\/div>/i)
@@ -122,7 +122,7 @@ function extractWoolworthsProductHtml(html: string): string {
   return html.substring(0, 30000)
 }
 
-function extractColesProductHtml(html: string): string {
+export function extractColesProductHtml(html: string): string {
   try {
     // For Coles, we'll take a different approach - just return the entire HTML
     // This ensures we don't miss any important data

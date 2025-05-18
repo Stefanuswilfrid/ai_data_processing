@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server"
 import { getExtractionProgress } from "@/app/actions"
 
 export async function GET() {
@@ -14,46 +15,65 @@ export async function GET() {
       // Function to send progress updates
       const sendProgress = async () => {
         try {
+          // Get current progress
           const progress = await getExtractionProgress()
+          const data = `data: ${JSON.stringify(progress)}\n\n`
 
-          // Format the data as an SSE event
-          const data = `data: ${JSON.stringify({ type: "progress", progress })}\n\n`
-
-          try {
-            controller.enqueue(new TextEncoder().encode(data))
-          } catch (error) {
-            console.error("Error enqueueing data:", error)
-            return // Exit the function if we can't enqueue
+          // Check if controller is still active before enqueueing
+          if (controller.desiredSize !== null) {
+            try {
+              controller.enqueue(new TextEncoder().encode(data))
+            } catch (error) {
+              console.error("Error enqueueing data:", error)
+              return // Exit the function if we can't enqueue
+            }
+          } else {
+            console.log("Stream controller is no longer active")
+            return // Exit if controller is no longer active
           }
 
-          // Continue sending updates if not complete
-          if (progress.percent < 100) {
-            setTimeout(sendProgress, 1000)
-          } else {
+          // If extraction is complete (100%), close the stream
+          if (progress.percent === 100) {
             // Send one final update
             try {
-              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: "complete" })}\n\n`))
-              controller.close()
-            } catch (closeError) {
-              console.error("Error sending final update:", closeError)
+              const finalData = `data: ${JSON.stringify({ ...progress, status: "Complete" })}\n\n`
+              controller.enqueue(new TextEncoder().encode(finalData))
+            } catch (error) {
+              console.error("Error sending final update:", error)
             }
+
+            // Close the stream after a short delay to ensure the client receives the final update
+            setTimeout(() => {
+              try {
+                controller.close()
+              } catch (error) {
+                console.error("Error closing controller:", error)
+              }
+            }, 1000)
+            return
           }
+
+          // Schedule the next update
+          setTimeout(sendProgress, 500)
         } catch (error) {
           console.error("Error sending progress:", error)
+
           try {
-            // Don't call controller.error as it can cause issues
-            // Just close the controller
+            // Send error to client
+            const errorData = `data: ${JSON.stringify({ error: "Error fetching progress" })}\n\n`
+            controller.enqueue(new TextEncoder().encode(errorData))
             controller.close()
-          } catch (controllerError) {
-            console.error("Error closing controller:", controllerError)
+          } catch (closeError) {
+            console.error("Error closing controller after error:", closeError)
           }
         }
       }
 
       // Start sending progress updates
-      sendProgress()
+      await sendProgress()
     },
   })
 
-  return new Response(stream, { headers })
+  // Return the stream as the response
+  return new NextResponse(stream, { headers })
 }

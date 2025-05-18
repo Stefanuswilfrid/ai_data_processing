@@ -56,7 +56,7 @@ export const SAMPLE_URLS = {
     "https://www.uniqlo.com/au/en/products/E465185-000?colorCode=COL02&sizeCode=SMA007",
   ],
   alcoholic: [
-    "https://bws.com.au/product/101473-tanqueray-london-dry-gin-700ml",
-    "https://www.coles.com.au/product/penfolds-koonunga-hill-shiraz-cabernet-750ml-2620682"
+        "https://www.coles.com.au/product/pensilva-shiraz-750ml-1-each-8304520",
+    "https://bws.com.au/product/31405/jacobs-creek-classic-chardonnay"
   ],
 };

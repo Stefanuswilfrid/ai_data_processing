@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { UrlInput } from "./inputs/url-input"
 import { InstructionInput } from "./inputs/instruction-input"
 import { Button } from "@/components/ui/button"
-import { Loader2, Table, FileSpreadsheet, HelpCircle, AlertTriangle, Info } from "lucide-react"
+import { Loader2, Table, FileSpreadsheet, HelpCircle } from "lucide-react"
 import { extractProductData, cancelExtraction, resetCancellation } from "@/app/actions"
 import { DataPreview } from "./data/data-preview"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -39,8 +39,6 @@ export function ProductDataExtractor() {
     [],
   )
   const isMobile = useMobile()
-
-  // Replace the progress tracking section with the previous implementation:
 
   // Progress tracking
   const [progress, setProgress] = useState({
@@ -84,11 +82,6 @@ export function ProductDataExtractor() {
       }
     }
   }, [isExtracting])
-
-  // Simple client-side progress tracking
-  // const [currentUrlIndex, setCurrentUrlIndex] = useState(0)
-  // const [totalUrls, setTotalUrls] = useState(0)
-  // const [currentUrl, setCurrentUrl] = useState("")
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -135,9 +128,6 @@ export function ProductDataExtractor() {
     setShowSuccess(false)
 
     // Reset progress
-    // setCurrentUrlIndex(0)
-    // setTotalUrls(urls.length)
-    // setCurrentUrl("")
     setProcessingStatus("Initializing extraction...")
 
     try {
@@ -152,38 +142,13 @@ export function ProductDataExtractor() {
         })
       }
 
-      // Set up a progress tracker using a worker or interval
-      // let progressInterval: NodeJS.Timeout | null = null
-
-      // if (urls.length > 1) {
-      //   // Simulate progress updates for each URL
-      //   progressInterval = setInterval(() => {
-      //     // This is just a simulation - in a real app, you'd get actual progress from the server
-      //     setCurrentUrlIndex((prev) => {
-      //       // Don't exceed the actual number of URLs
-      //       if (prev < urls.length) {
-      //         setCurrentUrl(urls[prev])
-      //         setProcessingStatus(`Processing ${urls[prev]}...`)
-      //         return prev
-      //       }
-      //       return prev
-      //     })
-      //   }, 5000) // Update every 5 seconds
-      // }
-
       const result = await extractProductData(urls, instruction)
-
-      // Clear the interval when done
-      // if (progressInterval) {
-      //   clearInterval(progressInterval)
-      // }
 
       setExtractedData(result.data)
       setDownloadUrl(result.downloadUrl)
       setShowSuccess(true)
 
       // Set progress to complete
-      // setCurrentUrlIndex(urls.length)
       setProcessingStatus("Extraction complete!")
 
       // Count successful extractions
@@ -313,7 +278,20 @@ export function ProductDataExtractor() {
 
                 {urls.length > 1 && (
                   <Alert className="bg-amber-900/20 border-amber-800/50 text-amber-200">
-                    <AlertTriangle className="h-4 w-4 mr-2" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-4 w-4 mr-2"
+                    >
+                      <path d="M10.29 3.29a1 1 0 0 0-1.42 0L3 10.59V19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V10.59l-5.7-7.3a1 1 0 0 0-1.42 0z"></path>
+                    </svg>
                     <AlertDescription>
                       <span className="font-medium">Processing multiple URLs will take {getEstimatedTime()}</span>
                       <br />
@@ -326,7 +304,22 @@ export function ProductDataExtractor() {
 
                 {urls.length > 3 && (
                   <Alert className="bg-blue-900/20 border-blue-800/50 text-blue-200">
-                    <Info className="h-4 w-4 mr-2" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-4 w-4 mr-2"
+                    >
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M12 16v-4"></path>
+                      <path d="M12 8h.01"></path>
+                    </svg>
                     <AlertDescription>
                       <span className="text-xs">
                         Tip: For faster results, process URLs in smaller batches of 2-3 at a time.
@@ -566,9 +559,22 @@ export function ProductDataExtractor() {
 
                     <div className="bg-slate-700/30 rounded-xl p-4 border border-slate-600/50">
                       <h3 className="font-medium text-white mb-2 flex items-center">
-                        <span className="flex items-center justify-center bg-violet-600/20 text-violet-400 w-6 h-6 rounded-full text-xs mr-2">
-                          3
-                        </span>
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="mr-2 text-indigo-400"
+                        >
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <path d="M12 16v-4"></path>
+                          <path d="M12 8h.01"></path>
+                        </svg>
                         Extract & Download
                       </h3>
                       <p className="text-sm">
@@ -734,12 +740,55 @@ export function ProductDataExtractor() {
                   <div className="mb-6 bg-amber-900/20 border border-amber-800/50 rounded-xl p-4 text-amber-200">
                     <div className="flex items-start">
                       <div className="flex-shrink-0 mt-0.5">
-                        <AlertTriangle className="h-5 w-5 text-amber-400" />
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-5 w-5 text-amber-400"
+                        >
+                          <path d="M10.29 3.29a1 1 0 0 0-1.42 0L3 10.59V19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V10.59l-5.7-7.3a1 1 0 0 0-1.42 0z"></path>
+                        </svg>
                       </div>
                       <div className="ml-3">
                         <p className="text-sm font-medium">Some URLs could not be processed</p>
                         <p className="mt-1 text-xs">
                           Try processing fewer URLs at once (2-3 maximum) or try again later.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {extractedData.some((item) => item.note?.includes("website restrictions")) && (
+                  <div className="mb-6 bg-amber-900/20 border border-amber-800/50 rounded-xl p-4 text-amber-200">
+                    <div className="flex items-start">
+                      <div className="flex-shrink-0 mt-0.5">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-5 w-5 text-amber-400"
+                        >
+                          <path d="M10.29 3.29a1 1 0 0 0-1.42 0L3 10.59V19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V10.59l-5.7-7.3a1 1 0 0 0-1.42 0z"></path>
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm font-medium">Limited data extraction for some sites</p>
+                        <p className="mt-1 text-xs">
+                          Some websites like BWS have anti-scraping measures that prevent full data extraction. For
+                          these sites, we've extracted basic information from the URL.
                         </p>
                       </div>
                     </div>

@@ -76,6 +76,32 @@ SITE-SPECIFIC TIPS (only if relevant to user's request):
 - Price per unit (e.g., $22.22/kg) is usually displayed near the price
 - Remember to format nutritional information as a simple string, not as an object
 `
+  } else if (domain.includes("bws.com.au")) {
+    promptTemplate = `
+You are a specialized e-commerce data extraction expert for BWS (Beer Wine Spirits) products.
+
+URL: ${url}
+
+USER INSTRUCTIONS:
+${instruction}
+
+IMPORTANT NOTE:
+The BWS website has anti-scraping measures that prevent direct access. We have limited data available from the URL.
+Based on the information provided, extract as much data as possible that matches the user's instructions.
+
+EXTRACTION GUIDELINES:
+- Extract EXACTLY the data fields requested in the user instructions above
+- Do NOT add fields that weren't requested
+- The data available is limited to what can be extracted from the URL and product name
+- Some requested fields may not be available due to website restrictions
+- Return all data in a clean JSON format with ONLY the fields requested by the user
+
+HTML CONTENT (LIMITED):
+${html}
+
+Return ONLY a valid JSON object with the extracted data. No explanations or markdown.
+Include a note field explaining that data is limited due to website restrictions.
+`
   }
 
   return promptTemplate
