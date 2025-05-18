@@ -204,9 +204,8 @@ export function ProductDataExtractor() {
     return "5+ minutes"
   }
 
-  // Calculate progress percentage
-  const progressPercent =
-    progress.percent || (progress.totalUrls > 0 ? Math.round((progress.currentUrlIndex / progress.totalUrls) * 100) : 0)
+  // Use the same progress calculation as ExtractionProgressDisplay
+  const progressPercent = progress.percent > 0 ? progress.percent : 5
 
   return (
     <ErrorBoundary>
@@ -223,7 +222,7 @@ export function ProductDataExtractor() {
       {/* Add debug display in development */}
       {process.env.NODE_ENV === "development" && isExtracting && (
         <div className="fixed bottom-4 right-4 bg-black/80 text-white p-2 rounded text-xs z-50">
-          Progress: {progress.percent}% - {progress.status}
+          Progress: {progressPercent}% - {progress.status}
           <br />
           URL: {progress.currentUrlIndex + 1}/{progress.totalUrls}
         </div>
@@ -420,7 +419,7 @@ export function ProductDataExtractor() {
                       <Button disabled className="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 text-white">
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Extracting data... {progressPercent > 0 ? `${progressPercent}%` : ""}
+                          Extracting data... {Math.round(progressPercent)}%
                         </>
                       </Button>
 
@@ -683,12 +682,10 @@ export function ProductDataExtractor() {
                 <div className="w-full max-w-md mt-6 bg-slate-700/30 rounded-full h-2.5">
                   <div
                     className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"
-                    style={{ width: `${progressPercent > 0 ? progressPercent : 5}%` }}
+                    style={{ width: `${progressPercent}%` }}
                   ></div>
                 </div>
-                <p className="text-xs text-slate-400 mt-2">
-                  {progressPercent > 0 ? Math.round(progressPercent) : 5}% complete
-                </p>
+                <p className="text-xs text-slate-400 mt-2">{Math.round(progressPercent)}% complete</p>
                 {progress.totalUrls > 1 && (
                   <p className="text-xs text-slate-400 mt-4">
                     Processing URL {progress.currentUrlIndex + 1} of {progress.totalUrls}

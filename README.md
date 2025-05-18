@@ -96,6 +96,10 @@ BWS uses strong anti-scraping protections, making full data extraction difficult
 - **Failed Approaches**: Browse.AI, Puppeteer (even with stealth), and direct API access
 - **Potential Improvements**: Host Puppeteer on a private server with rotating residential proxies
 
+### Inconsistent Progress tracking
+
+- Progress displays in different parts of the UI may show different percentages.This is due to different update mechanisms in the React components (**the top one is using the right mechanism, the bottom one isnt due to time constraint**)
+
 ---
 
 ## Project Structure
