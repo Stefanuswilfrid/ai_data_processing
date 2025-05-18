@@ -1,15 +1,36 @@
 import { NextResponse } from "next/server"
 import { getExtractionProgress } from "@/app/actions"
+import { getLatestExtractionId } from "@/lib/utils/redis-client"
 
-export async function GET() {
+export async function GET(request: Request) {
+  // Get the extraction ID from the query parameters
+  const url = new URL(request.url)
+  let extractionId = url.searchParams.get("id")
+
+  // If no extraction ID is provided, get the latest one
+  if (!extractionId) {
+    extractionId = await getLatestExtractionId()
+    if (!extractionId) {
+      return NextResponse.json({ error: "No active extraction found" }, { status: 404 })
+    }
+  }
+
+  // For debugging, allow a simple JSON response
+  const format = url.searchParams.get("format")
+  if (format === "json") {
+    const progress = await getExtractionProgress(extractionId)
+    return NextResponse.json(progress)
+  }
+
   // Set headers for SSE
   const headers = {
     "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
+    "Cache-Control": "no-cache, no-transform",
     Connection: "keep-alive",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
+    "X-Accel-Buffering": "no", // Disable buffering for Nginx
   }
 
   // Create a new ReadableStream
@@ -17,14 +38,70 @@ export async function GET() {
     async start(controller) {
       let lastProgressJson = ""
       let isActive = true
+      let consecutiveErrors = 0
+      const maxConsecutiveErrors = 5
+
+      // For debugging
+      console.log(`Starting SSE stream for extraction ${extractionId}`)
+
+      // Function to check if controller is still active
+      const isControllerActive = () => {
+        return isActive && controller && typeof controller.enqueue === "function"
+      }
+
+      // Function to safely enqueue data
+      const safeEnqueue = (data: string): boolean => {
+        if (!isControllerActive()) return false
+
+        try {
+          controller.enqueue(new TextEncoder().encode(data))
+          return true
+        } catch (error) {
+          console.error("Error enqueueing data:", error)
+          isActive = false
+          return false
+        }
+      }
+
+      // Send an initial message to establish the connection
+      const initialData = `data: ${JSON.stringify({
+        currentUrl: "",
+        currentUrlIndex: 0,
+        totalUrls: 0,
+        status: "Connecting to extraction progress...",
+        percent: 0,
+      })}\n\n`
+
+      if (!safeEnqueue(initialData)) {
+        return // Exit if we can't send the initial message
+      }
+
+      // Immediately fetch and send the current progress
+      try {
+        const initialProgress = await getExtractionProgress(extractionId || undefined)
+        if (initialProgress && typeof initialProgress.percent === "number") {
+          const data = `data: ${JSON.stringify(initialProgress)}\n\n`
+          safeEnqueue(data)
+          lastProgressJson = JSON.stringify(initialProgress)
+          console.log(`Initial progress sent: ${initialProgress.percent}% - ${initialProgress.status}`)
+        }
+      } catch (error) {
+        console.error("Error fetching initial progress:", error)
+      }
 
       // Function to send progress updates
       const sendProgress = async () => {
-        if (!isActive) return
+        if (!isControllerActive()) return
 
         try {
           // Get current progress
-          const progress = await getExtractionProgress()
+          const progress = await getExtractionProgress(extractionId || undefined)
+
+          // Ensure we have valid data
+          if (!progress) {
+            throw new Error("No progress data available")
+          }
+
           const progressJson = JSON.stringify(progress)
 
           // Only send update if progress has changed
@@ -32,12 +109,11 @@ export async function GET() {
             lastProgressJson = progressJson
             const data = `data: ${progressJson}\n\n`
 
-            try {
-              controller.enqueue(new TextEncoder().encode(data))
-              console.log(`Progress sent: ${progress.percent}% - ${progress.status}`)
-            } catch (error) {
-              console.error("Error enqueueing data:", error)
-              isActive = false
+            if (safeEnqueue(data)) {
+              console.log(`Progress sent via SSE: ${progress.percent}% - ${progress.status}`)
+              // Reset error counter on successful update
+              consecutiveErrors = 0
+            } else {
               return // Exit if we can't enqueue
             }
           }
@@ -45,48 +121,68 @@ export async function GET() {
           // If extraction is complete (100%), close the stream
           if (progress.percent === 100) {
             // Send one final update
-            try {
-              const finalData = `data: ${JSON.stringify({ ...progress, status: "Complete" })}\n\n`
-              controller.enqueue(new TextEncoder().encode(finalData))
-              console.log("Final progress update sent")
-            } catch (error) {
-              console.error("Error sending final update:", error)
-            }
+            const finalData = `data: ${JSON.stringify({ ...progress, status: "Complete" })}\n\n`
+            safeEnqueue(finalData)
+            console.log("Final progress update sent")
 
             // Close the stream after a short delay to ensure the client receives the final update
             setTimeout(() => {
               try {
                 isActive = false
-                controller.close()
-                console.log("Stream controller closed")
-              } catch (error) {
-                console.error("Error closing controller:", error)
+                if (controller) {
+                  controller.close()
+                  console.log("Stream controller closed")
+                }
+              } catch (closeError) {
+                console.error("Error closing controller:", closeError)
               }
             }, 1000)
             return
           }
 
-          // Schedule the next update
-          setTimeout(sendProgress, 200) // Poll more frequently
+          // Schedule the next update only if controller is still active
+          if (isControllerActive()) {
+            setTimeout(sendProgress, 500) // Poll every 500ms
+          }
         } catch (error) {
           console.error("Error sending progress:", error)
+          consecutiveErrors++
 
-          try {
-            // Send error to client
-            const errorData = `data: ${JSON.stringify({ error: "Error fetching progress" })}\n\n`
-            controller.enqueue(new TextEncoder().encode(errorData))
+          if (isControllerActive()) {
+            try {
+              // Send error to client
+              const errorData = `data: ${JSON.stringify({
+                error: "Error fetching progress",
+                details: String(error),
+                consecutiveErrors,
+              })}\n\n`
 
-            // Don't close the controller, just try again
-            setTimeout(sendProgress, 1000)
-          } catch (closeError) {
-            console.error("Error sending error message:", closeError)
-            isActive = false
+              safeEnqueue(errorData)
+
+              // Close the stream if we've had too many consecutive errors
+              if (consecutiveErrors >= maxConsecutiveErrors) {
+                console.error(`Too many consecutive errors (${consecutiveErrors}), closing stream`)
+                isActive = false
+                controller.close()
+                return
+              }
+
+              // Don't close the controller, just try again with increasing delay
+              const delay = Math.min(1000 * Math.pow(1.5, consecutiveErrors), 10000) // Exponential backoff with 10s max
+              setTimeout(sendProgress, delay)
+            } catch (closeError) {
+              console.error("Error sending error message:", closeError)
+              isActive = false
+            }
           }
         }
       }
 
       // Start sending progress updates
       await sendProgress()
+    },
+    cancel() {
+      console.log(`Client disconnected from SSE stream for extraction ${extractionId}`)
     },
   })
 

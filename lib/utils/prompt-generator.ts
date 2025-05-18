@@ -4,7 +4,6 @@
 export function generateEcommercePrompt(url: string, instruction: string, html: string): string {
   const domain = new URL(url).hostname.toLowerCase()
 
-  // Base prompt template that prioritizes user instructions
   let promptTemplate = `
 You are a specialized e-commerce data extraction expert. Extract structured product data from this product page.
 

@@ -11,40 +11,95 @@ import { extractBwsProductInfo, enrichBwsProductData } from "@/lib/utils/bws-ext
 import { extractWithScrapingAPI } from "@/lib/utils/scraping-api-extractor"
 import { extractWithBrowseAI } from "@/lib/utils/browse-ai-extractor"
 import type { ProductData } from "@/lib/types"
-
-// Global progress state (in-memory only)
-let extractionProgress = {
-  currentUrl: "",
-  currentUrlIndex: 0,
-  totalUrls: 0,
-  status: "",
-  percent: 0,
-}
-
-// Simple in-memory progress tracking
-function updateProgress(progress: typeof extractionProgress) {
-  extractionProgress = progress
-}
-
-// Function to get the current extraction progress
-export async function getExtractionProgress() {
-  return extractionProgress
-}
+import {
+  generateExtractionId,
+  storeProgress,
+  getProgress,
+  getLatestExtractionId,
+  cancelExtraction as cancelExtractionInRedis,
+} from "@/lib/utils/redis-client"
 
 // Flag to track if extraction should be cancelled
 let shouldCancelExtraction = false
 
-// Function to cancel the extraction process
-export async function cancelExtraction() {
-  shouldCancelExtraction = true
-  return { success: true }
+export async function getExtractionProgress(extractionId?: string): Promise<any> {
+  try {
+    if (!extractionId) {
+      const latestId = await getLatestExtractionId()
+      if (!latestId) {
+        return {
+          currentUrl: "",
+          currentUrlIndex: 0,
+          totalUrls: 0,
+          status: "No active extraction",
+          percent: 0,
+        }
+      }
+      extractionId = latestId as string
+    }
+
+    // Get progress from Redis
+    const progress = await getProgress(extractionId)
+    if (!progress) {
+      return {
+        currentUrl: "",
+        currentUrlIndex: 0,
+        totalUrls: 0,
+        status: "No data available",
+        percent: 0,
+      }
+    }
+
+    return progress
+  } catch (error) {
+    console.error("Error getting extraction progress:", error)
+    return {
+      currentUrl: "",
+      currentUrlIndex: 0,
+      totalUrls: 0,
+      status: "Error fetching progress",
+      percent: 0,
+      error: String(error),
+    }
+  }
 }
 
-export async function resetCancellation() {
+export async function cancelExtraction(extractionId?: string): Promise<{ success: boolean }> {
+  try {
+    shouldCancelExtraction = true
+
+    if (extractionId) {
+      await cancelExtractionInRedis(extractionId)
+    } else {
+      const latestId = await getLatestExtractionId()
+      if (latestId) {
+        await cancelExtractionInRedis(latestId)
+      }
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error("Error cancelling extraction:", error)
+    return { success: false }
+  }
+}
+
+export async function resetCancellation(): Promise<{ success: boolean }> {
   shouldCancelExtraction = false
   return { success: true }
 }
 
+export async function transformImage(
+  imageUrl: string,
+  prompt: string,
+  aspectRatio: string,
+): Promise<{ imageUrl: string }> {
+  // Placeholder implementation - replace with actual image transformation logic
+  console.log("Transforming image:", imageUrl, prompt, aspectRatio)
+  await new Promise((resolve) => setTimeout(resolve, 1000)) // Simulate processing time
+  const transformedImageUrl = `/transformed_${imageUrl.split("/").pop()}` // Simulate a transformed URL
+  return { imageUrl: transformedImageUrl }
+}
 
 /**
  * Fetch HTML content with enhanced error handling and anti-blocking measures
@@ -98,75 +153,6 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<string> {
     }
   }
 
-  // Special handling for BWS
-  if (domain.includes("bws.com.au")) {
-    logger.info(`BWS website detected. Using enhanced extraction for ${url}`)
-
-    // For BWS, extract product info from the URL itself
-    const productData = extractBwsProductInfo(url)
-
-    if (productData && productData.productId) {
-      try {
-        // Try to enrich with additional data from API
-        const enrichedData = await enrichBwsProductData(productData.productId)
-
-        // Merge the enriched data with the URL-extracted data
-        // Prioritize API data over URL-extracted data
-        const mergedData = {
-          ...productData,
-          ...enrichedData,
-          sourceUrl: url,
-          _salvaged: true,
-        }
-
-        // Convert the product data to HTML for consistency
-        return `
-          <html>
-            <body>
-              <h1>${mergedData.productName || ""}</h1>
-              ${Object.entries(mergedData)
-                .filter(([key]) => !["productName", "sourceUrl", "_salvaged"].includes(key))
-                .map(([key, value]) => {
-                  if (value === undefined || value === null) return ""
-                  if (typeof value === "object") {
-                    return `<div class="${key}">${JSON.stringify(value)}</div>`
-                  }
-                  return `<div class="${key}">${value}</div>`
-                })
-                .join("\n")}
-              <div class="product-url">${url}</div>
-              <div class="salvaged">true</div>
-            </body>
-          </html>
-        `
-      } catch (error) {
-        // If enrichment fails, just use the basic data
-        logger.warn(`API enrichment failed, using URL-extracted data: ${error}`)
-
-        // Convert the product data to HTML for consistency
-        return `
-          <html>
-            <body>
-              <h1>${productData.productName || ""}</h1>
-              ${Object.entries(productData)
-                .filter(([key]) => !["productName", "sourceUrl", "_salvaged"].includes(key))
-                .map(([key, value]) => {
-                  if (value === undefined || value === null) return ""
-                  if (typeof value === "object") {
-                    return `<div class="${key}">${JSON.stringify(value)}</div>`
-                  }
-                  return `<div class="${key}">${value}</div>`
-                })
-                .join("\n")}
-              <div class="product-url">${url}</div>
-              <div class="salvaged">true</div>
-            </body>
-          </html>
-        `
-      }
-    }
-  }
-
   // Define different user agents to rotate
   const userAgents = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
@@ -189,7 +175,6 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<string> {
           Referer: new URL(url).origin,
           "Cache-Control": "no-cache",
         },
-        next: { revalidate: 60 }, // Cache for 1 minute
       })
 
       if (!response.ok) {
@@ -218,10 +203,15 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<string> {
 export async function extractProductData(
   urls: string[],
   instruction: string,
-): Promise<{ data: ProductData[]; downloadUrl: string }> {
+): Promise<{ data: ProductData[]; downloadUrl: string; extractionId: string }> {
+  // Reset cancellation flag at the start
   shouldCancelExtraction = false
 
-  updateProgress({
+  // Generate a unique extraction ID
+  const extractionId = generateExtractionId()
+
+  // Initialize progress with correct total URLs count
+  await storeProgress(extractionId, {
     currentUrl: "",
     currentUrlIndex: 0,
     totalUrls: urls.length,
@@ -229,7 +219,7 @@ export async function extractProductData(
     percent: 0,
   })
 
-  logger.info(`Starting extraction for ${urls.length} URLs with instruction: ${instruction}`)
+  logger.info(`Starting extraction ${extractionId} for ${urls.length} URLs with instruction: ${instruction}`)
 
   // Process URLs sequentially
   const results: ProductData[] = []
@@ -237,7 +227,17 @@ export async function extractProductData(
   for (let i = 0; i < urls.length; i++) {
     // Check for cancellation flag
     if (shouldCancelExtraction) {
-      logger.info("Extraction cancelled by user")
+      logger.info(`Extraction ${extractionId} cancelled by user`)
+
+      // Update progress in Redis
+      await storeProgress(extractionId, {
+        currentUrl: "",
+        currentUrlIndex: i,
+        totalUrls: urls.length,
+        status: "Extraction cancelled by user",
+        percent: 100,
+      })
+
       throw new Error("Extraction cancelled")
     }
 
@@ -245,61 +245,80 @@ export async function extractProductData(
     const domain = new URL(url).hostname.toLowerCase()
 
     // Update progress with correct indices
-    updateProgress({
+    await storeProgress(extractionId, {
       currentUrl: url,
       currentUrlIndex: i,
       totalUrls: urls.length,
       status: `Fetching content from ${url}...`,
-      percent: i === 0 ? 5 : Math.round((i / urls.length) * 100),
+      // Change this line to ensure we never report 100% until truly complete
+      percent: Math.round((i / urls.length) * 80), // Only go up to 80% during URL processing
     })
 
     try {
       logger.info(`Processing URL ${i + 1}/${urls.length}: ${url}`)
 
-      // Special handling for BWS URLs
+      // Special handling for BWS URLs - DIRECT APPROACH WITHOUT HTML CONVERSION
       if (domain.includes("bws.com.au")) {
         // For BWS, extract product info from the URL itself
         const productData = extractBwsProductInfo(url)
 
         if (productData && productData.productId) {
           try {
+            // Update progress
+            await storeProgress(extractionId, {
+              currentUrl: url,
+              currentUrlIndex: i,
+              totalUrls: urls.length,
+              status: `Enriching BWS data for ${url}...`,
+              percent: Math.round((i / urls.length) * 80) + 2, // +2% for this step
+            })
+
             // Try to enrich with additional data from API
             const enrichedData = await enrichBwsProductData(productData.productId)
 
+            // Log the data before merging for debugging
+            logger.debug(`URL-extracted data: ${JSON.stringify(productData)}`)
+            logger.debug(`API-enriched data: ${JSON.stringify(enrichedData)}`)
+
             // Merge the enriched data with the URL-extracted data
             // Prioritize API data over URL-extracted data
-            const mergedData = {
+            const mergedData: ProductData = {
               ...productData,
               ...enrichedData,
               sourceUrl: url,
               _salvaged: true,
             }
 
+            // Log the merged data for debugging
+            logger.info(`BWS merged data: ${JSON.stringify(mergedData)}`)
+
             // Add to results and continue to next URL
             results.push(mergedData)
 
             // Update progress
-            updateProgress({
+            await storeProgress(extractionId, {
               currentUrl: url,
               currentUrlIndex: i,
               totalUrls: urls.length,
               status: `Completed ${url} (API data)`,
-              percent: Math.min(95, Math.round(((i + 1) / urls.length) * 100) + 25),
+              percent: Math.min(95, Math.round(((i + 1) / urls.length) * 80) + 25),
             })
 
             continue
           } catch (error) {
             // If enrichment fails, just use the basic data
             logger.warn(`API enrichment failed, using URL-extracted data: ${error}`)
+
+            // Add to results and continue to next URL
             results.push(productData)
 
             // Update progress
-            updateProgress({
+            await storeProgress(extractionId, {
               currentUrl: url,
               currentUrlIndex: i,
               totalUrls: urls.length,
               status: `Completed ${url} (limited data)`,
-              percent: Math.min(95, Math.round(((i + 1) / urls.length) * 100) + 25),
+              percent: Math.min(95, Math.round(((i + 1) / urls.length) * 80) + 25),
             })
 
             continue
@@ -319,17 +338,27 @@ export async function extractProductData(
 
       // Check for cancellation again
       if (shouldCancelExtraction) {
-        logger.info("Extraction cancelled by user after fetching HTML")
+        logger.info(`Extraction ${extractionId} cancelled by user after fetching HTML`)
+
+        // Update progress in Redis
+        await storeProgress(extractionId, {
+          currentUrl: url,
+          currentUrlIndex: i,
+          totalUrls: urls.length,
+          status: "Extraction cancelled by user",
+          percent: 100,
+        })
+
         throw new Error("Extraction cancelled")
       }
 
       // Update progress
-      updateProgress({
+      await storeProgress(extractionId, {
         currentUrl: url,
         currentUrlIndex: i,
         totalUrls: urls.length,
         status: "Analyzing product content...",
-        percent: Math.round(((i + 0.3) / urls.length) * 100) + 10,
+        percent: Math.round((i / urls.length) * 80) + 5, // +5% for this step
       })
 
       // Extract relevant HTML to reduce token usage
@@ -337,17 +366,27 @@ export async function extractProductData(
 
       // Check for cancellation again
       if (shouldCancelExtraction) {
-        logger.info("Extraction cancelled by user after analyzing HTML")
+        logger.info(`Extraction ${extractionId} cancelled by user after analyzing HTML`)
+
+        // Update progress in Redis
+        await storeProgress(extractionId, {
+          currentUrl: url,
+          currentUrlIndex: i,
+          totalUrls: urls.length,
+          status: "Extraction cancelled by user",
+          percent: 100,
+        })
+
         throw new Error("Extraction cancelled")
       }
 
       // Update progress
-      updateProgress({
+      await storeProgress(extractionId, {
         currentUrl: url,
         currentUrlIndex: i,
         totalUrls: urls.length,
         status: "Extracting product data with AI...",
-        percent: Math.round(((i + 0.5) / urls.length) * 100) + 15,
+        percent: Math.round((i / urls.length) * 80) + 8, // +8% for this step
       })
 
       // Generate site-specific prompt
@@ -368,17 +407,27 @@ export async function extractProductData(
 
       // Check for cancellation again
       if (shouldCancelExtraction) {
-        logger.info("Extraction cancelled by user after AI processing")
+        logger.info(`Extraction ${extractionId} cancelled by user after AI processing`)
+
+        // Update progress in Redis
+        await storeProgress(extractionId, {
+          currentUrl: url,
+          currentUrlIndex: i,
+          totalUrls: urls.length,
+          status: "Extraction cancelled by user",
+          percent: 100,
+        })
+
         throw new Error("Extraction cancelled")
       }
 
       // Update progress
-      updateProgress({
+      await storeProgress(extractionId, {
         currentUrl: url,
         currentUrlIndex: i,
         totalUrls: urls.length,
         status: "Processing extracted data...",
-        percent: Math.round(((i + 0.8) / urls.length) * 100) + 20,
+        percent: Math.round((i / urls.length) * 80) + 12, // +12% for this step
       })
 
       // Parse and validate the extracted data
@@ -391,22 +440,22 @@ export async function extractProductData(
       })
 
       // Update progress
-      updateProgress({
+      await storeProgress(extractionId, {
         currentUrl: url,
         currentUrlIndex: i,
         totalUrls: urls.length,
         status: `Completed ${url}`,
-        percent: Math.min(95, Math.round(((i + 1) / urls.length) * 100) + 25),
+        percent: Math.min(95, Math.round(((i + 1) / urls.length) * 80)), // Move to next URL percentage
       })
 
       // Add delay between URLs to avoid rate limits
       if (i < urls.length - 1) {
-        updateProgress({
+        await storeProgress(extractionId, {
           currentUrl: "",
           currentUrlIndex: i,
           totalUrls: urls.length,
           status: "Waiting before processing next URL...",
-          percent: Math.round(((i + 1) / urls.length) * 100),
+          percent: Math.round(((i + 1) / urls.length) * 80),
         })
 
         // Wait 2 seconds between URLs
@@ -427,23 +476,23 @@ export async function extractProductData(
       })
 
       // Update progress
-      updateProgress({
+      await storeProgress(extractionId, {
         currentUrl: url,
         currentUrlIndex: i,
         totalUrls: urls.length,
         status: `Error processing ${url}`,
-        percent: Math.round(((i + 1) / urls.length) * 100),
+        percent: Math.round((i / urls.length) * 80),
       })
     }
   }
 
   // Update progress
-  updateProgress({
+  await storeProgress(extractionId, {
     currentUrl: "",
     currentUrlIndex: urls.length - 1,
     totalUrls: urls.length,
     status: "Generating spreadsheet...",
-    percent: 95,
+    percent: 90, // Fixed 90% for spreadsheet generation
   })
 
   // Generate Excel file
@@ -456,18 +505,18 @@ export async function extractProductData(
   const dataUrl = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${excelBuffer}`
 
   // Update progress
-  updateProgress({
+  await storeProgress(extractionId, {
     currentUrl: "",
     currentUrlIndex: urls.length,
     totalUrls: urls.length,
     status: "Extraction complete!",
-    percent: 100,
+    percent: 100, // Only set to 100% at the very end
   })
 
   logger.info(`Successfully extracted data from ${results.filter((r) => !r.error).length}/${urls.length} URLs`)
 
   revalidatePath("/")
-  return { data: results, downloadUrl: dataUrl }
+  return { data: results, downloadUrl: dataUrl, extractionId }
 }
 
 export async function uploadToBlob(file: File): Promise<string> {

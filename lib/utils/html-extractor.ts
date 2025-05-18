@@ -186,13 +186,11 @@ function extractKmartProductHtml(html: string): string {
 
 function extractTargetProductHtml(html: string): string {
   try {
-    // Try to extract product details section
     const productDetailsMatch = html.match(/<div[^>]*class=["']?product-details[^"']*["']?[^>]*>([\s\S]*?)<\/div>/i)
     if (productDetailsMatch && productDetailsMatch[1] && productDetailsMatch[1].length > 500) {
       return productDetailsMatch[1]
     }
 
-    // Try to extract product information sections
     let extractedParts = ""
 
     // Extract product title

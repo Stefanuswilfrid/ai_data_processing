@@ -1,13 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { UrlInput } from "./inputs/url-input"
 import { InstructionInput } from "./inputs/instruction-input"
 import { Button } from "@/components/ui/button"
-import { Loader2, Table, FileSpreadsheet, HelpCircle } from "lucide-react"
+import { Loader2, FileSpreadsheet, HelpCircle } from "lucide-react"
 import { extractProductData, cancelExtraction, resetCancellation } from "@/app/actions"
 import { DataPreview } from "./data/data-preview"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { motion } from "framer-motion"
 import { useToast } from "@/hooks/use-toast"
@@ -20,8 +19,8 @@ import { ExportOptions } from "./data/export-options"
 import { KeyboardShortcuts } from "./keyboard-shortcuts"
 import type { ProductData } from "@/lib/types"
 import { useMobile } from "@/hooks/use-mobile"
-import { Progress } from "@/components/ui/progress"
 import ProgressTracker from "./progress-tracker"
+import { ExtractionProgressDisplay } from "./extraction-progress-display"
 
 export function ProductDataExtractor() {
   const [urls, setUrls] = useState<string[]>([])
@@ -34,6 +33,7 @@ export function ProductDataExtractor() {
   const [showSuccess, setShowSuccess] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [processingStatus, setProcessingStatus] = useState<string>("")
+  const [extractionId, setExtractionId] = useState<string | null>(null)
   const { toast } = useToast()
   const [history, setHistory] = useLocalStorage<{ date: string; urls: string[]; data: ProductData[] }[]>(
     "extraction-history",
@@ -51,30 +51,30 @@ export function ProductDataExtractor() {
   })
 
   // Handle progress updates from the ProgressTracker
-  const handleProgressUpdate = (progressData : any) => {
-    setProgress(progressData)
-    setProcessingStatus(progressData.status || "Processing...")
-  }
+  const handleProgressUpdate = useCallback((progressData: any) => {
+    console.log("Progress update received in parent:", progressData)
 
-  // Handle keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl/Cmd + Enter to submit
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-        if (urls.length > 0 && instruction && !isExtracting) {
-          handleSubmit()
+    if (progressData && typeof progressData.percent === "number") {
+      // Force a re-render by creating a new object
+      setProgress((prev) => {
+        // Only update if the data is actually different
+        if (
+          prev.percent !== progressData.percent ||
+          prev.status !== progressData.status ||
+          prev.currentUrl !== progressData.currentUrl
+        ) {
+          console.log("Updating progress state:", progressData)
+          return { ...progressData }
         }
-      }
+        return prev
+      })
 
-      // Escape to cancel extraction
-      if (e.key === "Escape" && isExtracting) {
-        handleCancel()
-      }
+      // Also update the processing status
+      setProcessingStatus(progressData.status || "Processing...")
+    } else {
+      console.warn("Invalid progress data received:", progressData)
     }
-
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [urls, instruction, isExtracting])
+  }, [])
 
   // Reset cancellation when component unmounts
   useEffect(() => {
@@ -99,6 +99,7 @@ export function ProductDataExtractor() {
     setExtractedData([])
     setDownloadUrl(null)
     setShowSuccess(false)
+    setExtractionId(null)
 
     // Reset progress
     setProgress({
@@ -126,6 +127,7 @@ export function ProductDataExtractor() {
 
       setExtractedData(result.data)
       setDownloadUrl(result.downloadUrl)
+      setExtractionId(result.extractionId)
       setShowSuccess(true)
 
       // Set progress to complete
@@ -178,7 +180,7 @@ export function ProductDataExtractor() {
   const handleCancel = async () => {
     if (isExtracting) {
       try {
-        await cancelExtraction()
+        await cancelExtraction(extractionId || undefined)
         toast({
           title: "Cancelling extraction...",
           description: "The data extraction process is being cancelled.",
@@ -209,7 +211,24 @@ export function ProductDataExtractor() {
   return (
     <ErrorBoundary>
       <KeyboardShortcuts />
-      <ProgressTracker isExtracting={isExtracting} onProgressUpdate={handleProgressUpdate} />
+
+      {/* Add key={extractionId} to force re-creation when extraction changes */}
+      <ProgressTracker
+        key={extractionId || "no-extraction"}
+        isExtracting={isExtracting}
+        onProgressUpdate={handleProgressUpdate}
+        extractionId={extractionId || undefined}
+      />
+
+      {/* Add debug display in development */}
+      {process.env.NODE_ENV === "development" && isExtracting && (
+        <div className="fixed bottom-4 right-4 bg-black/80 text-white p-2 rounded text-xs z-50">
+          Progress: {progress.percent}% - {progress.status}
+          <br />
+          URL: {progress.currentUrlIndex + 1}/{progress.totalUrls}
+        </div>
+      )}
+
       <div className="space-y-8">
         <div className="grid md:grid-cols-2 gap-8">
           <motion.div
@@ -279,7 +298,7 @@ export function ProductDataExtractor() {
                       strokeLinejoin="round"
                       className="h-4 w-4 mr-2"
                     >
-                      <path d="M10.29 3.29a1 1 0 0 0-1.42 0L3 10.59V19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V10.59l-5.7-7.3a1 1 0 0 0-1.42 0z"></path>
+                      <path d="M10 3 4 10.59V19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V10.59l-5.7-7.3a1 1 0 0 0-1 0z"></path>
                     </svg>
                     <AlertDescription>
                       <span className="font-medium">Processing multiple URLs will take {getEstimatedTime()}</span>
@@ -435,26 +454,11 @@ export function ProductDataExtractor() {
                   )}
                 </div>
 
-                {isExtracting && (
-                  <div className="space-y-2 mt-4">
-                    <Progress value={progressPercent > 0 ? progressPercent : 5} className="h-2" />
-
-                    <div className="flex justify-between text-xs text-slate-400">
-                      <span>
-                        Processing URL {progress.currentUrlIndex + 1} of {progress.totalUrls}
-                      </span>
-                      <span>{progressPercent > 0 ? Math.round(progressPercent) : 5}%</span>
-                    </div>
-
-                    <div className="text-xs text-amber-300 text-center animate-pulse">{processingStatus}</div>
-
-                    {progress.currentUrl && (
-                      <div className="text-xs text-slate-400 truncate">
-                        <span className="text-slate-500">Current URL:</span> {progress.currentUrl}
-                      </div>
-                    )}
-                  </div>
-                )}
+                <ExtractionProgressDisplay
+                  isExtracting={isExtracting}
+                  progress={progress}
+                  getEstimatedTime={getEstimatedTime}
+                />
 
                 {!isExtracting && (
                   <div className="text-xs text-slate-400 text-center">
@@ -741,7 +745,7 @@ export function ProductDataExtractor() {
                           strokeLinejoin="round"
                           className="h-5 w-5 text-amber-400"
                         >
-                          <path d="M10.29 3.29a1 1 0 0 0-1.42 0L3 10.59V19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V10.59l-5.7-7.3a1 1 0 0 0-1.42 0z"></path>
+                          <path d="M10 3 4 10.59V19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V10.59l-5.7-7.3a1 1 0 0 0-1 0z"></path>
                         </svg>
                       </div>
                       <div className="ml-3">
@@ -770,65 +774,27 @@ export function ProductDataExtractor() {
                           strokeLinejoin="round"
                           className="h-5 w-5 text-amber-400"
                         >
-                          <path d="M10.29 3.29a1 1 0 0 0-1.42 0L3 10.59V19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V10.59l-5.7-7.3a1 1 0 0 0-1.42 0z"></path>
+                          <path d="M10 3 4 10.59V19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V10.59l-5.7-7.3a1 1 0 0 0-1 0z"></path>
                         </svg>
                       </div>
                       <div className="ml-3">
-                        <p className="text-sm font-medium">Limited data extraction for some sites</p>
-                        <p className="mt-1 text-xs">
-                          Some websites like BWS have anti-scraping measures that prevent full data extraction. For
-                          these sites, we've extracted basic information from the URL.
-                        </p>
+                        <p className="text-sm font-medium">Website restrictions may have prevented data extraction</p>
+                        <p className="mt-1 text-xs">Check the website's terms of service or try again later.</p>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {isMobile && downloadUrl && (
-                  <div className="mb-4">
-                    <ExportOptions
-                      downloadUrl={downloadUrl}
-                      data={extractedData}
-                      onExport={(format) => {
-                        toast({
-                          title: `Exported as ${format.toUpperCase()}`,
-                          description: "Your data has been exported successfully",
-                          variant: "success",
-                        })
-                      }}
-                    />
-                  </div>
-                )}
-
-                <Tabs defaultValue="table" className="w-full">
-                  <TabsList className="mb-4 bg-slate-700/50 border border-slate-600/50">
-                    <TabsTrigger
-                      value="table"
-                      className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white"
-                    >
-                      <Table className="h-4 w-4 mr-2" />
-                      Table View
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="json"
-                      className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white"
-                    >
-                      JSON View
-                    </TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="table">
-                    <div className="overflow-x-auto">
-                      <DataPreview data={extractedData} />
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="json">
-                    <pre className="bg-slate-900/50 p-4 rounded-xl overflow-x-auto text-sm text-slate-300 border border-slate-700/50">
-                      {JSON.stringify(extractedData, null, 2)}
-                    </pre>
-                  </TabsContent>
-                </Tabs>
+                <DataPreview data={extractedData} />
               </>
-            ) : null}
+            ) : (
+              <div className="flex flex-col items-center justify-center py-16">
+                <p className="text-slate-300 font-medium">No data extracted yet</p>
+                <p className="text-sm text-slate-400 mt-2 max-w-md text-center">
+                  Enter URLs and extraction instructions to get started.
+                </p>
+              </div>
+            )}
           </motion.div>
         )}
       </div>
