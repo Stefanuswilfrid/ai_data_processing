@@ -17,7 +17,6 @@ export async function extractWithScrapingAPI(url: string): Promise<string> {
     apiUrl.searchParams.append("render_js", "true")
     apiUrl.searchParams.append("premium_proxy", "true")
 
-    // Add parameters for BWS specifically
     if (url.includes("bws.com.au")) {
       apiUrl.searchParams.append("wait", "5000") // Wait for content to load
       apiUrl.searchParams.append("wait_for", ".product-details, .product-name")

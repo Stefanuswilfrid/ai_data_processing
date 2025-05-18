@@ -110,7 +110,6 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<string> {
 
   // Use ScrapingAPI for BWS and other problematic sites
   if (domain.includes("bws.com.au") || domain.includes("danmurphys.com.au")) {
-    // Check if ScrapingAPI key is configured
     if (process.env.SCRAPING_API_KEY) {
       logger.info(`Using ScrapingAPI for ${url}`)
       try {
@@ -122,7 +121,6 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<string> {
     }
   }
 
-  // Use Browse.AI for BWS and other problematic sites
   if (
     (domain.includes("bws.com.au") || domain.includes("danmurphys.com.au")) &&
     process.env.BROWSE_AI_API_KEY &&

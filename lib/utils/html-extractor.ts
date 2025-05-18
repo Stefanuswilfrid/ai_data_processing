@@ -45,9 +45,7 @@ export function extractRelevantHtml(html: string, url: string): string {
       }
     }
 
-    // If we couldn't extract a specific section, be more aggressive with truncation
     if (relevantHtml === html) {
-      // Remove scripts, styles, and other non-content elements
       relevantHtml = html
         .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
         .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
@@ -60,7 +58,6 @@ export function extractRelevantHtml(html: string, url: string): string {
       logger.info(`Removed scripts, styles, and non-content elements (${relevantHtml.length} bytes)`)
     }
 
-    // Further truncate if still too large
     const maxLength = 30000
     if (relevantHtml.length > maxLength) {
       relevantHtml = relevantHtml.substring(0, maxLength)
@@ -68,7 +65,6 @@ export function extractRelevantHtml(html: string, url: string): string {
     }
   } catch (error) {
     logger.warn(`Error extracting relevant HTML: ${error}. Using truncated full HTML instead.`)
-    // If extraction fails, just truncate the original HTML
     relevantHtml = html.substring(0, 30000)
   }
 
@@ -78,7 +74,6 @@ export function extractRelevantHtml(html: string, url: string): string {
 // Site-specific extraction functions
 export function extractWoolworthsProductHtml(html: string): string {
   try {
-    // Try to extract product details section
     const productDetailsMatch = html.match(/<div[^>]*class=["']?product-details[^"']*["']?[^>]*>([\s\S]*?)<\/div>/i)
     if (productDetailsMatch && productDetailsMatch[1] && productDetailsMatch[1].length > 500) {
       return productDetailsMatch[1]
@@ -118,7 +113,6 @@ export function extractWoolworthsProductHtml(html: string): string {
     logger.warn(`Error in Woolworths extraction: ${e}`)
   }
 
-  // Fallback to generic extraction
   return html.substring(0, 30000)
 }
 

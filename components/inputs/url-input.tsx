@@ -47,7 +47,6 @@ export function UrlInput({ urls, setUrls, onUrlSelect, activeUrl }: UrlInputProp
     setCurrentUrl("")
     setError(null)
 
-    // Set as active URL if it's the first one
     if (urls.length === 0) {
       onUrlSelect(currentUrl)
     }
@@ -62,7 +61,6 @@ export function UrlInput({ urls, setUrls, onUrlSelect, activeUrl }: UrlInputProp
     const newUrls = urls.filter((url) => url !== urlToRemove)
     setUrls(newUrls)
 
-    // If the active URL was removed, select another one
     if (activeUrl === urlToRemove && newUrls.length > 0) {
       onUrlSelect(newUrls[0])
     } else if (newUrls.length === 0) {

@@ -11,6 +11,7 @@ A powerful tool for extracting structured product data from e-commerce websites 
 - Export data to Excel, CSV, or JSON
 - View extraction history
 - Responsive design for desktop and mobile
+- Real-time progress tracking with redis
 
 ## Tech Stack
 
@@ -19,12 +20,14 @@ A powerful tool for extracting structured product data from e-commerce websites 
 - **AI**: OpenAI GPT models via AI SDK
 - **Data Processing**: XLSX for spreadsheet generation
 - **State Management**: React Hooks and Server Actions
+- **Progress Tracking**: Upstash Redis for reliable progress updates
 
 ## Prerequisites
 
 - Node.js 18.x or higher
 - npm or yarn
 - OpenAI API key
+- Upstash Redis
 
 ## Environment Variables
 
@@ -32,6 +35,8 @@ Create a `.env.local` file in the root directory with the following variables:
 
 ```
 OPENAI_API_KEY=your_openai_api_key
+UPSTASH_REDIS_REST_TOKEN=
+UPSTASH_REDIS_REST_TOKEN=
 ```
 
 ## Installation
@@ -83,8 +88,6 @@ The application can extract data from various e-commerce websites, including:
 
 ## Limitations
 
-## 🚫 Limitations
-
 ### BWS Extraction
 
 BWS uses strong anti-scraping protections, making full data extraction difficult.
@@ -94,14 +97,6 @@ BWS uses strong anti-scraping protections, making full data extraction difficult
 - **Potential Improvements**: Host Puppeteer on a private server with rotating residential proxies
 
 ---
-
-### Progress Tracking
-
-Progress updates are always reliable.
-
-- **Uses**: Server-Sent Events (SSE) with polling fallback
-- **Issues**: progress isnt real time
-- **Potential Improvements**: Use upstash(redis) so that progress is sync between backend and frontend
 
 ## Project Structure
 
@@ -121,6 +116,7 @@ Progress updates are always reliable.
 │ ├── data-parser.ts # Parse AI responses
 │ ├── html-extractor.ts # Extract relevant HTML
 │ ├── logger.ts # Logging utility
+| |-- redis-client.ts # redis
 │ └── prompt-generator.ts # Generate AI prompts
 ├── public/ # Static assets
 └── .env.local # Environment variables
@@ -155,6 +151,58 @@ For easy testing:
 1. Click the "Sample Data" button to load pre-configured URLs
 2. Use the template selector in the Extraction Instructions section for common extraction patterns
 3. The AI Generate button can create extraction instructions based on the type of product
+
+## Implementation Details
+
+### Key Components
+
+1. **Server Actions (`app/actions.ts`)**
+
+   - Handles the core extraction logic using Next.js Server Actions
+   - Processes URLs sequentially to avoid rate limiting
+   - Implements different extraction strategies based on the website
+
+2. **Progress Tracking System (`lib/utils/redis-client.ts`)**
+
+   - Uses Upstash Redis for persistent progress storage
+   - Generates unique extraction IDs for each job
+   - Stores progress with expiration (30 minutes) to prevent Redis overflow
+   - Provides methods for updating and retrieving progress
+
+3. **Progress Communication (`app/api/extraction-progress/route.ts`)**
+
+   - Implements Server-Sent Events (SSE) for real-time updates
+   - Includes safeguards against "controller closed" errors
+   - Provides fallback to direct API polling when SSE fails
+
+4. **Client-Side Progress Handling (`components/progress-tracker.tsx`)**
+
+   - Manages multiple connection methods (SSE and polling)
+   - Implements reconnection logic with exponential backoff
+   - Prevents premature 100% completion display
+   - Uses smooth progress transitions for better UX
+
+5. **BWS-Specific Extraction (`lib/utils/bws-extractor.ts`)**
+   - Extracts basic product info from URL structure
+   - Attempts to enrich data via BWS API endpoints
+   - Implements fallbacks when API access fails
+
+### Progress Calculation
+
+The progress percentage is carefully calibrated to accurately reflect the extraction status:
+
+- 0-80%: URL processing (divided proportionally among URLs)
+- 80-90%: Data processing and spreadsheet generation
+- 90-100%: Final steps and completion
+
+This prevents the UI from showing 100% before the extraction is truly complete.
+
+### Error Handling and Resilience
+
+- **Retry Logic**: Implements exponential backoff for failed requests
+- **Graceful Degradation**: Falls back to simpler extraction methods when advanced methods fail
+- **Connection Recovery**: Automatically reconnects when progress tracking connections are lost
+- **Cancellation Support**: Allows users to safely cancel ongoing extractions
 
 ### Common Issues
 

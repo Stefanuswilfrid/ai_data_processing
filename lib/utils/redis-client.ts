@@ -44,7 +44,6 @@ export async function storeProgress(
   console.log(`Progress stored in Redis: ${progress.percent}% - ${progress.status}`)
 }
 
-// Get progress from Redis
 export async function getProgress(extractionId: string): Promise<ProgressData | null> {
   const data = await redis.get<string | ProgressData>(`progress:${extractionId}`)
   if (!data) return null

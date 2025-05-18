@@ -7,7 +7,6 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   let extractionId = url.searchParams.get("id")
 
-  // If no extraction ID is provided, get the latest one
   if (!extractionId) {
     extractionId = await getLatestExtractionId()
     if (!extractionId) {
@@ -15,7 +14,6 @@ export async function GET(request: Request) {
     }
   }
 
-  // For debugging, allow a simple JSON response
   const format = url.searchParams.get("format")
   if (format === "json") {
     const progress = await getExtractionProgress(extractionId)
@@ -41,10 +39,8 @@ export async function GET(request: Request) {
       let consecutiveErrors = 0
       const maxConsecutiveErrors = 5
 
-      // For debugging
       console.log(`Starting SSE stream for extraction ${extractionId}`)
 
-      // Function to check if controller is still active
       const isControllerActive = () => {
         return isActive && controller && typeof controller.enqueue === "function"
       }
@@ -94,10 +90,8 @@ export async function GET(request: Request) {
         if (!isControllerActive()) return
 
         try {
-          // Get current progress
           const progress = await getExtractionProgress(extractionId || undefined)
 
-          // Ensure we have valid data
           if (!progress) {
             throw new Error("No progress data available")
           }
