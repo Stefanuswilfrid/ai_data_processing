@@ -21,6 +21,7 @@ import { KeyboardShortcuts } from "./keyboard-shortcuts"
 import type { ProductData } from "@/lib/types"
 import { useMobile } from "@/hooks/use-mobile"
 import { Progress } from "@/components/ui/progress"
+import ProgressTracker from "./progress-tracker"
 
 export function ProductDataExtractor() {
   const [urls, setUrls] = useState<string[]>([])
@@ -49,39 +50,11 @@ export function ProductDataExtractor() {
     percent: 0,
   })
 
-  // Listen for progress updates from server
-  useEffect(() => {
-    const handleProgressUpdate = (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data)
-        if (data.type === "progress") {
-          setProgress(data.progress)
-          setProcessingStatus(data.progress.status)
-        }
-      } catch (e) {
-        console.error("Error parsing progress event:", e)
-      }
-    }
-
-    // Setup event source for progress updates
-    let eventSource: EventSource | null = null
-
-    if (isExtracting) {
-      eventSource = new EventSource("/api/extraction-progress")
-      eventSource.onmessage = handleProgressUpdate
-      eventSource.onerror = () => {
-        if (eventSource) {
-          eventSource.close()
-        }
-      }
-    }
-
-    return () => {
-      if (eventSource) {
-        eventSource.close()
-      }
-    }
-  }, [isExtracting])
+  // Handle progress updates from the ProgressTracker
+  const handleProgressUpdate = (progressData : any) => {
+    setProgress(progressData)
+    setProcessingStatus(progressData.status || "Processing...")
+  }
 
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -128,6 +101,13 @@ export function ProductDataExtractor() {
     setShowSuccess(false)
 
     // Reset progress
+    setProgress({
+      currentUrl: "",
+      currentUrlIndex: 0,
+      totalUrls: urls.length,
+      status: "Initializing extraction...",
+      percent: 0,
+    })
     setProcessingStatus("Initializing extraction...")
 
     try {
@@ -149,6 +129,13 @@ export function ProductDataExtractor() {
       setShowSuccess(true)
 
       // Set progress to complete
+      setProgress({
+        currentUrl: "",
+        currentUrlIndex: urls.length - 1,
+        totalUrls: urls.length,
+        status: "Extraction complete!",
+        percent: 100,
+      })
       setProcessingStatus("Extraction complete!")
 
       // Count successful extractions
@@ -216,11 +203,13 @@ export function ProductDataExtractor() {
   }
 
   // Calculate progress percentage
-  const progressPercent = progress.totalUrls > 0 ? Math.round((progress.currentUrlIndex / progress.totalUrls) * 100) : 0
+  const progressPercent =
+    progress.percent || (progress.totalUrls > 0 ? Math.round((progress.currentUrlIndex / progress.totalUrls) * 100) : 0)
 
   return (
     <ErrorBoundary>
       <KeyboardShortcuts />
+      <ProgressTracker isExtracting={isExtracting} onProgressUpdate={handleProgressUpdate} />
       <div className="space-y-8">
         <div className="grid md:grid-cols-2 gap-8">
           <motion.div
@@ -448,13 +437,13 @@ export function ProductDataExtractor() {
 
                 {isExtracting && (
                   <div className="space-y-2 mt-4">
-                    <Progress value={progress.percent > 0 ? progress.percent : 5} className="h-2" />
+                    <Progress value={progressPercent > 0 ? progressPercent : 5} className="h-2" />
 
                     <div className="flex justify-between text-xs text-slate-400">
                       <span>
                         Processing URL {progress.currentUrlIndex + 1} of {progress.totalUrls}
                       </span>
-                      <span>{progress.percent > 0 ? Math.round(progress.percent) : 5}%</span>
+                      <span>{progressPercent > 0 ? Math.round(progressPercent) : 5}%</span>
                     </div>
 
                     <div className="text-xs text-amber-300 text-center animate-pulse">{processingStatus}</div>
@@ -690,11 +679,11 @@ export function ProductDataExtractor() {
                 <div className="w-full max-w-md mt-6 bg-slate-700/30 rounded-full h-2.5">
                   <div
                     className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"
-                    style={{ width: `${progress.percent > 0 ? progress.percent : 5}%` }}
+                    style={{ width: `${progressPercent > 0 ? progressPercent : 5}%` }}
                   ></div>
                 </div>
                 <p className="text-xs text-slate-400 mt-2">
-                  {progress.percent > 0 ? Math.round(progress.percent) : 5}% complete
+                  {progressPercent > 0 ? Math.round(progressPercent) : 5}% complete
                 </p>
                 {progress.totalUrls > 1 && (
                   <p className="text-xs text-slate-400 mt-4">

@@ -40,25 +40,11 @@ export async function cancelExtraction() {
   return { success: true }
 }
 
-// Reset cancellation flag
 export async function resetCancellation() {
   shouldCancelExtraction = false
   return { success: true }
 }
 
-export async function transformImage(
-  imageUrl: string,
-  prompt: string,
-  aspectRatio: string,
-): Promise<{ imageUrl: string }> {
-  // Placeholder implementation - replace with actual image transformation logic
-  console.log("Transforming image:", imageUrl, prompt, aspectRatio)
-  await new Promise((resolve) => setTimeout(resolve, 1000)) // Simulate processing time
-  const transformedImageUrl = `/transformed_${imageUrl.split("/").pop()}` // Simulate a transformed URL
-  return { imageUrl: transformedImageUrl }
-}
-
-// Update the fetchWithRetry function to always return a string
 
 /**
  * Fetch HTML content with enhanced error handling and anti-blocking measures
@@ -229,15 +215,12 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<string> {
   throw new Error(`Failed to fetch ${url} after ${maxRetries} attempts`)
 }
 
-// Then modify the extractProductData function to use the new fetchWithRetry function
 export async function extractProductData(
   urls: string[],
   instruction: string,
 ): Promise<{ data: ProductData[]; downloadUrl: string }> {
-  // Reset cancellation flag at the start
   shouldCancelExtraction = false
 
-  // Initialize progress with correct total URLs count
   updateProgress({
     currentUrl: "",
     currentUrlIndex: 0,
